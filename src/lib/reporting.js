@@ -100,9 +100,12 @@ Expected DMARC: ${config.expectedDmarc}
 ${reportContent}
 `;
 
+    // Parse and normalize recipient email addresses (support comma-separated list)
+    const recipients = config.email.to.split(',').map(e => e.trim()).join(', ');
+
     const info = await transporter.sendMail({
       from: config.email.from,
-      to: config.email.to,
+      to: recipients,
       subject: config.email.subject,
       text: emailBody,
     });

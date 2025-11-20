@@ -320,7 +320,7 @@ All configuration is done through the `.env` file:
 - `SMTP_USER`: SMTP username
 - `SMTP_PASSWORD`: SMTP password
 - `EMAIL_FROM`: Sender email address
-- `EMAIL_TO`: Recipient email address
+- `EMAIL_TO`: Recipient email address(es) - supports comma-separated list for multiple recipients
 - `EMAIL_SUBJECT`: Email subject line
 
 ## How It Works

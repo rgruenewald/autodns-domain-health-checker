@@ -85,17 +85,21 @@ function parseContext() {
 
 /**
  * Validate email address with proper error message
- * @param {string|undefined} email - Email address to validate
+ * @param {string|undefined} email - Email address to validate (or comma-separated list)
  * @param {string} fieldName - Field name for error message
- * @returns {string} Validated email address
+ * @returns {string} Validated email address(es)
  * @throws {ConfigurationError} If email is invalid
  */
 function validateEmailAddress(email, fieldName) {
   if (!email) {
     throw new ConfigurationError(`${fieldName} is required`);
   }
-  if (!isValidEmail(email)) {
-    throw new ConfigurationError(`Invalid ${fieldName}: ${email}`);
+  // Support comma-separated email addresses
+  const emails = email.split(',').map(e => e.trim());
+  for (const addr of emails) {
+    if (!isValidEmail(addr)) {
+      throw new ConfigurationError(`Invalid ${fieldName}: ${addr}`);
+    }
   }
   return email;
 }
