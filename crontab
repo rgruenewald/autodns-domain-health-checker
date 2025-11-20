@@ -1,0 +1,10 @@
+# Run AutoDNS Domain Health Checker twice daily at 1am and 1pm
+# Logs are written to /app/reports/ directory
+
+# At 1:00 AM
+0 1 * * * cd /app && node src/index.js >> /app/reports/cron.log 2>&1
+
+# At 1:00 PM
+0 13 * * * cd /app && node src/index.js >> /app/reports/cron.log 2>&1
+
+# Empty line required at end of cron file

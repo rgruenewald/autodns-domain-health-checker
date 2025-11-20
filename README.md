@@ -75,6 +75,88 @@ diebasis-domain-health/
 
 ## Usage
 
+Run manually with:
+```bash
+npm start
+```
+
+For dry-run mode (no changes to AutoDNS):
+```bash
+npm start -- --dry-run
+```
+
+Or build and run with Docker:
+```bash
+docker-compose up --build
+```
+
+## Docker with Automated Scheduling
+
+The application can run as a Docker container with built-in cron scheduling. The container will:
+- Execute health checks twice daily (1:00 AM and 1:00 PM)
+- Auto-restart on system boot
+- Persist reports to the host filesystem
+
+### Setup
+
+1. **Configure environment variables**:
+   ```bash
+   cp .env.example .env
+   # Edit .env with your credentials
+   ```
+
+2. **Configure DKIM settings**:
+   ```bash
+   cp dkim.config.example.json dkim.config.json
+   # Edit dkim.config.json with your DKIM records
+   ```
+
+3. **Build and start the container**:
+   ```bash
+   docker-compose up -d --build
+   ```
+
+4. **Verify cron is running**:
+   ```bash
+   docker-compose logs
+   ```
+
+The container will now run automatically on system boot and execute health checks at 1:00 AM and 1:00 PM daily.
+
+### Cron Schedule Customization
+
+To change the schedule, edit the `crontab` file:
+```bash
+# Format: minute hour day month weekday command
+0 1 * * *    # Runs at 1:00 AM daily
+0 13 * * *   # Runs at 1:00 PM daily
+```
+
+After changing the schedule, rebuild the container:
+```bash
+docker-compose up -d --build
+```
+
+### Monitoring
+
+View cron execution logs:
+```bash
+# View all logs
+docker-compose logs -f
+
+# View only cron execution logs
+tail -f reports/cron.log
+```
+
+### Manual Execution
+
+Run a check immediately without waiting for the scheduled time:
+```bash
+docker-compose exec diebasis-domain-health node src/index.js
+```
+
+## Usage (Standalone)
+
 Run the application:
 ```bash
 npm start
