@@ -1,5 +1,5 @@
 import axios from 'axios';
-import pRetry from 'p-retry';
+import pRetry, { AbortError } from 'p-retry';
 import { config } from './config.js';
 import { logger, logError } from '../utils/logger.js';
 import { sanitizeDomainName } from '../utils/validators.js';
@@ -215,7 +215,7 @@ export async function queryDomains() {
         }
 
         if (!isRetryableError(error)) {
-          throw new pRetry.AbortError(error);
+          throw new AbortError(error);
         }
 
         throw error;
@@ -304,7 +304,7 @@ export async function getZone(zoneName) {
         }
 
         if (!isRetryableError(error)) {
-          throw new pRetry.AbortError(error);
+          throw new AbortError(error);
         }
 
         throw error;
@@ -427,7 +427,7 @@ export async function updateZone(zoneName, zoneData) {
         }
 
         if (!isRetryableError(error)) {
-          throw new pRetry.AbortError(error);
+          throw new AbortError(error);
         }
 
         throw error;
