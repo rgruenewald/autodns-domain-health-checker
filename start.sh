@@ -30,21 +30,32 @@ if ! docker info > /dev/null 2>&1; then
     exit 1
 fi
 
+# Detect docker compose command (v2 "docker compose" or v1 "docker-compose")
+if docker compose version > /dev/null 2>&1; then
+    DOCKER_COMPOSE="docker compose"
+elif command -v docker-compose > /dev/null 2>&1; then
+    DOCKER_COMPOSE="docker-compose"
+else
+    echo "❌ Error: Neither 'docker compose' nor 'docker-compose' found"
+    echo "   Please install Docker Compose"
+    exit 1
+fi
+
 echo "✅ Configuration files found"
 echo "🔨 Building and starting container..."
 echo ""
 
 # Build and start
-docker-compose up -d --build
+$DOCKER_COMPOSE up -d --build
 
 echo ""
 echo "✅ Container started successfully!"
 echo ""
 echo "📊 Status:"
-docker-compose ps
+$DOCKER_COMPOSE ps
 echo ""
 echo "📋 View logs:"
-echo "   docker-compose logs -f"
+echo "   $DOCKER_COMPOSE logs -f"
 echo ""
 echo "📁 Cron execution log:"
 echo "   tail -f reports/cron.log"
@@ -54,8 +65,8 @@ echo "   • 1:00 AM daily"
 echo "   • 1:00 PM daily"
 echo ""
 echo "🏃 Run manually now:"
-echo "   docker-compose exec diebasis-domain-health node src/index.js"
+echo "   $DOCKER_COMPOSE exec diebasis-domain-health node src/index.js"
 echo ""
 echo "🛑 Stop the service:"
-echo "   docker-compose down"
+echo "   $DOCKER_COMPOSE down"
 echo ""
