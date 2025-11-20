@@ -1,0 +1,39 @@
+services:
+  diebasis-domain-health:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: diebasis-domain-health
+    env_file:
+      - .env
+    environment:
+      - LOG_LEVEL=warn
+      - LOG_PRETTY=true
+    user: "${UID:-1000}:${GID:-1000}"
+    volumes:
+      # Mount reports directory to persist reports on host
+      - ./reports:/app/reports
+      # Mount DKIM config with read-only access
+      - ./dkim.config.json:/app/dkim.config.json:ro
+    restart: "no"
+    # Resource limits to prevent runaway processes
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+    # Read-only root filesystem (except for reports)
+    read_only: true
+    tmpfs:
+      - /tmp
+    # Drop unnecessary capabilities
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
