@@ -1,5 +1,5 @@
 {
-    "name": "diebasis-domain-health",
+    "name": "domain-health-checker",
     "version": "1.0.0",
     "description": "Query and output domains from AutoDNS API",
     "main": "src/index.js",

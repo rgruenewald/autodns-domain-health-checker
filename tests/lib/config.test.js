@@ -143,8 +143,8 @@ describe('config', () => {
     it('should use default DMARC report auth domain', () => {
       delete process.env.DMARC_REPORT_AUTH_DOMAIN;
       const defaultDomain = process.env.DMARC_REPORT_AUTH_DOMAIN ||
-        'diebasis.de';
-      expect(defaultDomain).toBe('diebasis.de');
+        'example.com';
+      expect(defaultDomain).toBe('example.com');
     });
   });
 

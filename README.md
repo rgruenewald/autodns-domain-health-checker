@@ -16,7 +16,7 @@ A modular Node.js application to query and validate domain health from AutoDNS A
 ## Project Structure
 
 ```
-diebasis-domain-health/
+domain-health-checker/
 ├── src/
 │   ├── index.js                    # Main entry point
 │   ├── lib/
@@ -152,7 +152,7 @@ tail -f reports/cron.log
 
 Run a check immediately without waiting for the scheduled time:
 ```bash
-docker-compose exec diebasis-domain-health node src/index.js
+docker-compose exec domain-health-checker node src/index.js
 ```
 
 ## Usage (Standalone)
@@ -190,7 +190,7 @@ health flag `H:` at the end. Below is what we check and how we decide ok/fail.
 - Source: DNS TXT for the zone apex
 - Pass when the current TXT record starting with `v=spf1` matches the
    expected policy. The tool also builds a flattened SPF (resolves include:
-   and certain A/MX mechanisms) and updates `_spf.diebasis.de` with it.
+   and certain A/MX mechanisms) and updates `_spf.example.com` with it.
 - Remediation: auto-create/update SPF at apex (guarding against apex CNAME);
    dry-run prevents changes.
 
@@ -302,8 +302,8 @@ All configuration is done through the `.env` file:
 - `DRY_RUN`: Set to `true` to generate reports without making changes (default: `false`)
 
 ### SPF Configuration
-- `DIEBASIS_DE_SPF_RECORD_NAME`: Name of the SPF record to update (e.g., `_spf.diebasis.de`)
-- `DIEBASIS_DE_SPF_RECORD_VALUE`: Expected SPF record value
+- `MAIN_SPF_RECORD_NAME`: Name of the SPF record to update (e.g., `_spf.example.com`)
+- `MAIN_SPF_RECORD_VALUE`: Expected SPF record value
 
 ### DMARC Configuration
 - `EXPECTED_DMARC`: Expected DMARC policy (no spaces after semicolons for strict compliance)
@@ -336,7 +336,7 @@ All configuration is done through the `.env` file:
 - Queries `_dmarc` TXT record
 - Normalizes spacing for comparison
 - Updates if policy mismatch or missing
-- Creates external reporting authorization TXT in specified domain (e.g., `domainname._report._dmarc.diebasis.de`)
+- Creates external reporting authorization TXT in specified domain (e.g., `domainname._report._dmarc.example.com`)
 
 ### DKIM Detection
 - Checks DNS for configured selectors (e.g., `selector._domainkey.domain.com`)

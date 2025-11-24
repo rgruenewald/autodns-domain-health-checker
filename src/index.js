@@ -9,7 +9,7 @@ import {
   queryDomains,
   shutdownAutoDNSRateLimiter,
 } from './lib/autodns-client.js';
-import { buildFlattenedSpfRecord, updateDiebasisSPFRecord }
+import { buildFlattenedSpfRecord, updateMainSPFRecord }
   from './lib/spf.js';
 import { processDomains } from './lib/domain-processor.js';
 import { saveReport, sendReportByEmail } from './lib/reporting.js';
@@ -69,7 +69,7 @@ async function main() {
     // Resolve all SPF includes and build flattened record
     logger.debug('Building flattened SPF record');
     const flattenedSpf = await buildFlattenedSpfRecord(
-      config.diebasisDeSpfRecordValue,
+      config.mainSpfRecordValue,
     );
     logger.info({ record: flattenedSpf }, 'Flattened SPF record built');
 
@@ -77,14 +77,13 @@ async function main() {
     logger.info('Processing domains and performing health checks');
     const reportContent = await processDomains(
       data,
-      config.diebasisDeSpfRecordValue,
+      config.mainSpfRecordValue,
       flattenedSpf,
     );
 
-    // Update _spf.diebasis.de TXT record with flattened SPF
-    logger.debug('Updating diebasis.de SPF record');
-    await updateDiebasisSPFRecord(
-      config.diebasisDeSpfRecordName,
+    logger.debug('Updating main SPF record');
+    await updateMainSPFRecord(
+      config.mainSpfRecordName,
       flattenedSpf,
     );
 

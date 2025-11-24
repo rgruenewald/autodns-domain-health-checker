@@ -93,7 +93,7 @@ export async function updateDomainDMARCRecord(domainName, dmarcValue) {
 }
 
 /**
- * Add DMARC reporting authorization record to diebasis.de zone
+ * Add DMARC reporting authorization record
  * @param {string} domainName - Domain requesting authorization
  * @returns {Promise<boolean>} Success status
  */
@@ -102,7 +102,7 @@ export async function addDMARCReportAuthRecord(domainName) {
   const recordValue = 'v=DMARC1';
 
   try {
-    // Get current zone data for diebasis.de
+    // Get current zone data
     const zoneInfo = await getZone(config.dmarcReportAuthDomain);
 
     if (!zoneInfo.data || !Array.isArray(zoneInfo.data) ||

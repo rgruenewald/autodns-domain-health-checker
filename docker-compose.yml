@@ -1,9 +1,9 @@
 services:
-  diebasis-domain-health:
+  domain-health-checker:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: diebasis-domain-health
+    container_name: domain-health-checker
     env_file:
       - .env
     environment:

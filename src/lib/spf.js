@@ -219,14 +219,14 @@ export async function updateDomainSPFRecord(domainName, spfValue) {
 }
 
 /**
- * Update the _spf.diebasis.de TXT record specifically
- * @param {string} recordName - Full record name (e.g., _spf.diebasis.de)
+ * Update the main SPF TXT record specifically
+ * @param {string} recordName - Full record name (e.g., _spf.example.com)
  * @param {string} spfValue - New SPF value
  * @returns {Promise<object>} Update result
  */
-export async function updateDiebasisSPFRecord(recordName, spfValue) {
-  logger.info({ record: recordName, value: spfValue }, 'Updating diebasis SPF record');
-  logger.info({ record: recordName, value: spfValue }, 'Updating diebasis SPF record');
+export async function updateMainSPFRecord(recordName, spfValue) {
+  logger.info({ record: recordName, value: spfValue }, 'Updating main SPF record');
+  logger.info({ record: recordName, value: spfValue }, 'Updating main SPF record');
   console.log(`\nUpdating DNS record: ${recordName}`);
   console.log(`New value: ${spfValue}\n`);
 

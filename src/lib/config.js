@@ -30,8 +30,8 @@ import {
  * @property {string} password - AutoDNS API password
  * @property {number} context - AutoDNS API context ID
  * @property {string} apiUrl - AutoDNS API base URL
- * @property {string} diebasisDeSpfRecordName - SPF record name for diebasis.de
- * @property {string} diebasisDeSpfRecordValue - SPF record value
+ * @property {string} mainSpfRecordName - Main SPF record name
+ * @property {string} mainSpfRecordValue - Main SPF record value
  * @property {SMTPConfig} smtp - SMTP server configuration
  * @property {EmailConfig} email - Email configuration
  * @property {string} expectedSpf - Expected SPF record format
@@ -135,8 +135,8 @@ export const config = {
   password: process.env.AUTODNS_PASSWORD,
   context: parseContext(),
   apiUrl: process.env.AUTODNS_API_URL || 'https://api.autodns.com/v1',
-  diebasisDeSpfRecordName: process.env.DIEBASIS_DE_SPF_RECORD_NAME,
-  diebasisDeSpfRecordValue: process.env.DIEBASIS_DE_SPF_RECORD_VALUE,
+  mainSpfRecordName: process.env.MAIN_SPF_RECORD_NAME,
+  mainSpfRecordValue: process.env.MAIN_SPF_RECORD_VALUE,
   smtp: {
     host: process.env.SMTP_HOST,
     port: parseSMTPPort(),
@@ -149,13 +149,9 @@ export const config = {
     to: process.env.EMAIL_TO,
     subject: process.env.EMAIL_SUBJECT || 'AutoDNS Domain Health Report',
   },
-  expectedSpf: 'v=spf1 a mx include:_spf.diebasis.de -all',
-  expectedDmarc: process.env.EXPECTED_DMARC ||
-    'v=DMARC1;p=reject;sp=reject;adkim=s;aspf=s;' +
-    'rua=mailto:dmarc-reports@diebasis.de;' +
-    'ruf=mailto:dmarc-failures@diebasis.de;fo=d:s',
-  dmarcReportAuthDomain: process.env.DMARC_REPORT_AUTH_DOMAIN ||
-    'diebasis.de',
+  expectedSpf: process.env.EXPECTED_SPF || '',
+  expectedDmarc: process.env.EXPECTED_DMARC || '',
+  dmarcReportAuthDomain: process.env.DMARC_REPORT_AUTH_DOMAIN || '',
   dkimSelectors: process.env.DKIM_SELECTORS ?
     process.env.DKIM_SELECTORS.split(',').map((s) => s.trim()) :
     ['s1', 's2'],
@@ -191,9 +187,9 @@ export function validateConfig() {
   }
 
   // Validate SPF record configuration
-  if (!config.diebasisDeSpfRecordName || !config.diebasisDeSpfRecordValue) {
+  if (!config.mainSpfRecordName || !config.mainSpfRecordValue) {
     errors.push('Missing SPF record configuration ' +
-      '(DIEBASIS_DE_SPF_RECORD_NAME and DIEBASIS_DE_SPF_RECORD_VALUE)');
+      '(MAIN_SPF_RECORD_NAME and MAIN_SPF_RECORD_VALUE)');
   }
 
   // Validate email addresses if provided
