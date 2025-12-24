@@ -75,7 +75,7 @@ async function main() {
 
     // Generate the main report with flattening info included
     logger.info('Processing domains and performing health checks');
-    const reportContent = await processDomains(
+    const { reportContent, hasFailures } = await processDomains(
       data,
       config.mainSpfRecordValue,
       flattenedSpf,
@@ -92,11 +92,14 @@ async function main() {
     await saveReport(reportContent);
     logger.info('Report saved successfully');
 
-    // Send the report by email if configured
-    if (config.smtp.host && config.email.to) {
-      logger.debug({ to: config.email.to }, 'Sending report via email');
+    // Send the report by email only if there were failures/errors
+    if (hasFailures && config.smtp.host && config.email.to) {
+      logger.debug({ to: config.email.to }, 'Sending report via email (due to failures)');
       await sendReportByEmail(reportContent);
       logger.info('Report sent via email');
+    } else if (!hasFailures) {
+      console.log('\nNo failures detected. Skipping email notification.');
+      logger.info('No failures detected, email notification skipped');
     } else {
       console.log('\nEmail sending is not configured. ' +
         'Skipping email notification.');

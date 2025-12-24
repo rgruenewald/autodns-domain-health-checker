@@ -18,14 +18,14 @@ import { config } from './config.js';
  * @param {object} data - API response with domain data
  * @param {string} originalSpf - Original SPF value
  * @param {string} flattenedSpf - Flattened SPF value
- * @returns {Promise<string>} Report content
+ * @returns {Promise<{reportContent: string, hasFailures: boolean}>} Report content and failure flag
  */
 export async function processDomains(data, originalSpf, flattenedSpf) {
   // Check for errors
   if (!data || data.status?.type === 'ERROR') {
     console.log('Error in API response:',
       data?.status?.text || 'Unknown error');
-    return '';
+    return { reportContent: '', hasFailures: true };
   }
 
   // The API returns data directly at the root level
@@ -35,7 +35,7 @@ export async function processDomains(data, originalSpf, flattenedSpf) {
 
   if (domains.length === 0) {
     console.log('No domains found in this account.');
-    return '';
+    return { reportContent: '', hasFailures: false };
   }
 
   // Limit to specific domains for testing (if enabled)
@@ -57,6 +57,7 @@ export async function processDomains(data, originalSpf, flattenedSpf) {
 
   // Build output for both console and file
   let fileOutput = '';
+  let hasFailures = false;
 
   // Load desired DKIM config
   const dkimConfig = await loadDkimConfig();
@@ -101,6 +102,14 @@ export async function processDomains(data, originalSpf, flattenedSpf) {
       const aStatus = result.aDisplay !== '-' ? 'ok' : 'fail';
       const aaaaStatus = result.aaaaDisplay !== '-' ? 'ok' : 'fail';
 
+      // Check for any failures or errors
+      if (result.spfStatus === 'fail' || result.spfStatus === 'error' ||
+          result.dmarcStatus === 'fail' || result.dmarcStatus === 'error' ||
+          result.dkimStatus === 'fail' || result.dkimStatus === 'error' ||
+          aStatus === 'fail' || aaaaStatus === 'fail') {
+        hasFailures = true;
+      }
+
       // Write multi-line format to file output
       fileOutput += `${timestamp} ${domainName}\n`;
       fileOutput += `    SPF:        ${result.spfStatus}\n`;
@@ -138,6 +147,7 @@ export async function processDomains(data, originalSpf, flattenedSpf) {
       console.log(''); // Empty line
       fileOutput += `${timestamp} ${domainName}\n`;
       fileOutput += `    ERROR: processing failed: ${msg}\n\n`;
+      hasFailures = true; // Mark as failure due to processing error
       // continue with next domain
     }
   }
@@ -152,7 +162,7 @@ export async function processDomains(data, originalSpf, flattenedSpf) {
     fileOutput += `Flattened:\n${flattenedSpf}\n`;
   }
 
-  return fileOutput;
+  return { reportContent: fileOutput, hasFailures };
 }
 
 /**
