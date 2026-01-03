@@ -85,7 +85,9 @@ function createLogger() {
     config.transport = transport;
   }
 
-  return pino(config);
+  // Create logger with explicit stdout destination to avoid buffering issues
+  // pino.destination(1) creates a synchronous write stream to stdout (fd 1)
+  return pino(config, pino.destination({ dest: 1, sync: false }));
 }
 
 /**
