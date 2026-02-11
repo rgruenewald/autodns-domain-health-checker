@@ -1,16 +1,11 @@
 #!/usr/bin/env node
 
-import {
-  config,
-  validateConfig,
-  ConfigurationError,
-} from './lib/config.js';
+import { config, validateConfig, ConfigurationError } from './lib/config.js';
 import {
   queryDomains,
   shutdownAutoDNSRateLimiter,
 } from './lib/autodns-client.js';
-import { buildFlattenedSpfRecord, updateMainSPFRecord }
-  from './lib/spf.js';
+import { buildFlattenedSpfRecord, updateMainSPFRecord } from './lib/spf.js';
 import { processDomains } from './lib/domain-processor.js';
 import { saveReport, sendReportByEmail } from './lib/reporting.js';
 import { colors } from './utils/helpers.js';
@@ -51,8 +46,9 @@ async function main() {
     if (error instanceof ConfigurationError) {
       console.error(`${colors.red}Configuration Error:${colors.reset}`);
       console.error(error.message);
-      console.error('\nPlease check your .env file. ' +
-        'See .env.example for reference');
+      console.error(
+        '\nPlease check your .env file. ' + 'See .env.example for reference',
+      );
       logError(logger, error, 'Configuration validation failed');
       process.exit(1);
     }
@@ -68,24 +64,26 @@ async function main() {
 
     // Resolve all SPF includes and build flattened record
     logger.debug('Building flattened SPF record');
-    const flattenedSpf = await buildFlattenedSpfRecord(
-      config.mainSpfRecordValue,
+    const spfData = await buildFlattenedSpfRecord(config.mainSpfRecordValue);
+    logger.info(
+      {
+        record: spfData.mainRecord,
+        needsSplit: spfData.needsSplit,
+        chunks: spfData.chunkRecords.length,
+      },
+      'Flattened SPF record built',
     );
-    logger.info({ record: flattenedSpf }, 'Flattened SPF record built');
 
     // Generate the main report with flattening info included
     logger.info('Processing domains and performing health checks');
     const { reportContent, hasFailures } = await processDomains(
       data,
       config.mainSpfRecordValue,
-      flattenedSpf,
+      spfData,
     );
 
     logger.debug('Updating main SPF record');
-    await updateMainSPFRecord(
-      config.mainSpfRecordName,
-      flattenedSpf,
-    );
+    await updateMainSPFRecord(config.mainSpfRecordName, spfData);
 
     // Save report to file
     logger.debug('Saving report to file');
@@ -94,22 +92,27 @@ async function main() {
 
     // Send the report by email only if there were failures/errors
     if (hasFailures && config.smtp.host && config.email.to) {
-      logger.debug({ to: config.email.to }, 'Sending report via email (due to failures)');
+      logger.debug(
+        { to: config.email.to },
+        'Sending report via email (due to failures)',
+      );
       await sendReportByEmail(reportContent);
       logger.info('Report sent via email');
     } else if (!hasFailures) {
       console.log('\nNo failures detected. Skipping email notification.');
       logger.info('No failures detected, email notification skipped');
     } else {
-      console.log('\nEmail sending is not configured. ' +
-        'Skipping email notification.');
+      console.log(
+        '\nEmail sending is not configured. ' + 'Skipping email notification.',
+      );
       logger.info('Email not configured, skipping notification');
     }
 
     logger.info('Domain health check completed successfully');
   } catch (error) {
-    console.error(`\n${colors.red}Error:${colors.reset} ` +
-      'Failed to process domains');
+    console.error(
+      `\n${colors.red}Error:${colors.reset} ` + 'Failed to process domains',
+    );
     console.error(error.message);
     if (error.stack) {
       console.error('\nStack trace:');

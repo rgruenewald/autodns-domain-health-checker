@@ -4,7 +4,7 @@ A modular Node.js application to query and validate domain health from AutoDNS A
 
 ## Features
 
-- **SPF Record Validation**: Checks and updates SPF records, with automatic flattening of includes
+- **SPF Record Validation**: Checks and updates SPF records, with automatic flattening of includes and DNS UDP-safe splitting
 - **DMARC Record Management**: Validates DMARC policies, creates/updates records, and adds external reporting authorization
 - **DKIM Record Discovery**: Detects DKIM selectors via DNS or zone enumeration, updates records from local config
 - **Email Reports**: Sends detailed plain-text reports via SMTP with summary counts
@@ -330,6 +330,8 @@ All configuration is done through the `.env` file:
 - Compares to expected value
 - Updates if mismatch or missing
 - Flattens includes to prevent lookup limit issues
+- **Filters domain-contextual mechanisms**: Plain `a` and `mx` mechanisms are automatically filtered out during flattening since they reference the domain where they appear. Each domain should include these in its own SPF record (e.g., `v=spf1 a mx include:_spf.domain.com -all`)
+- **Automatic UDP-Safe Splitting**: If the flattened SPF record exceeds 450 bytes, it automatically splits the record into multiple chunks (e.g., `_spf1`, `_spf2`, `_spf3`) to avoid DNS UDP fragmentation (512 byte limit). Each chunk ends with `~all` (softfail) and the main SPF record (`_spf`) includes these chunks via `include:` statements with a final `-all` policy enforced at the top level
 - Guards against apex CNAME conflicts
 
 ### DMARC Validation

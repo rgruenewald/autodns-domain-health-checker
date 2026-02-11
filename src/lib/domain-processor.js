@@ -1,15 +1,30 @@
 import { getZone } from './autodns-client.js';
 import { getSPFRecord, updateDomainSPFRecord } from './spf.js';
-import { getDMARCRecord, normalizeDMARC, updateDomainDMARCRecord,
-  addDMARCReportAuthRecord } from './dmarc.js';
-import { checkDKIMRecords, listZoneDKIMRecords, updateDomainDKIMRecord,
-  loadDkimConfig, saveDkimConfig } from './dkim.js';
-import { getARecords, getAAAARecords, getMXRecords }
-  from './dns-operations.js';
-import { checkNS, checkSOA, checkCAA, checkMtaSts, checkTlsRpt,
-  checkPTRForOutbound, checkMXIntegrity, buildHealthSummary,
-  usesAutoDNSNameservers }
-  from './health-checks.js';
+import {
+  getDMARCRecord,
+  normalizeDMARC,
+  updateDomainDMARCRecord,
+  addDMARCReportAuthRecord,
+} from './dmarc.js';
+import {
+  checkDKIMRecords,
+  listZoneDKIMRecords,
+  updateDomainDKIMRecord,
+  loadDkimConfig,
+  saveDkimConfig,
+} from './dkim.js';
+import { getARecords, getAAAARecords, getMXRecords } from './dns-operations.js';
+import {
+  checkNS,
+  checkSOA,
+  checkCAA,
+  checkMtaSts,
+  checkTlsRpt,
+  checkPTRForOutbound,
+  checkMXIntegrity,
+  buildHealthSummary,
+  usesAutoDNSNameservers,
+} from './health-checks.js';
 import { colors, formatTimestamp } from '../utils/helpers.js';
 import { config } from './config.js';
 
@@ -17,14 +32,16 @@ import { config } from './config.js';
  * Process and check all domains
  * @param {object} data - API response with domain data
  * @param {string} originalSpf - Original SPF value
- * @param {string} flattenedSpf - Flattened SPF value
+ * @param {object} spfData - SPF data object with mainRecord, chunkRecords, needsSplit
  * @returns {Promise<{reportContent: string, hasFailures: boolean}>} Report content and failure flag
  */
-export async function processDomains(data, originalSpf, flattenedSpf) {
+export async function processDomains(data, originalSpf, spfData) {
   // Check for errors
   if (!data || data.status?.type === 'ERROR') {
-    console.log('Error in API response:',
-      data?.status?.text || 'Unknown error');
+    console.log(
+      'Error in API response:',
+      data?.status?.text || 'Unknown error',
+    );
     return { reportContent: '', hasFailures: true };
   }
 
@@ -40,7 +57,9 @@ export async function processDomains(data, originalSpf, flattenedSpf) {
 
   // Limit to specific domains for testing (if enabled)
   if (config.testDomainsEnabled && config.testDomains.length > 0) {
-    domains = domains.filter(d => config.testDomains.includes(d.name || d.origin));
+    domains = domains.filter((d) =>
+      config.testDomains.includes(d.name || d.origin),
+    );
   }
 
   // Sort domains alphabetically by name
@@ -51,7 +70,7 @@ export async function processDomains(data, originalSpf, flattenedSpf) {
   });
 
   if (config.testDomainsEnabled) {
-    const testingList = domains.map(d => d.name || d.origin).join(', ');
+    const testingList = domains.map((d) => d.name || d.origin).join(', ');
     console.log(`Testing with domain(s): ${testingList || 'none found'}\n`);
   }
 
@@ -93,7 +112,7 @@ export async function processDomains(data, originalSpf, flattenedSpf) {
 
       // Parse health summary
       const healthParts = {};
-      result.healthSummary.split('; ').forEach(part => {
+      result.healthSummary.split('; ').forEach((part) => {
         const [key, value] = part.split(':');
         healthParts[key] = value;
       });
@@ -103,10 +122,16 @@ export async function processDomains(data, originalSpf, flattenedSpf) {
       const aaaaStatus = result.aaaaDisplay !== '-' ? 'ok' : 'fail';
 
       // Check for any failures or errors
-      if (result.spfStatus === 'fail' || result.spfStatus === 'error' ||
-          result.dmarcStatus === 'fail' || result.dmarcStatus === 'error' ||
-          result.dkimStatus === 'fail' || result.dkimStatus === 'error' ||
-          aStatus === 'fail' || aaaaStatus === 'fail') {
+      if (
+        result.spfStatus === 'fail' ||
+        result.spfStatus === 'error' ||
+        result.dmarcStatus === 'fail' ||
+        result.dmarcStatus === 'error' ||
+        result.dkimStatus === 'fail' ||
+        result.dkimStatus === 'error' ||
+        aStatus === 'fail' ||
+        aaaaStatus === 'fail'
+      ) {
         hasFailures = true;
       }
 
@@ -115,8 +140,8 @@ export async function processDomains(data, originalSpf, flattenedSpf) {
       fileOutput += `    SPF:        ${result.spfStatus}\n`;
       fileOutput += `    DMARC:      ${result.dmarcStatus}\n`;
       fileOutput += `    DKIM:       ${result.dkimStatus}\n`;
-      fileOutput += `    A:          ${aStatus}${result.aDisplay !== '-' ? ` - ${  result.aDisplay}` : ''}\n`;
-      fileOutput += `    AAAA:       ${aaaaStatus}${result.aaaaDisplay !== '-' ? ` - ${  result.aaaaDisplay}` : ''}\n`;
+      fileOutput += `    A:          ${aStatus}${result.aDisplay !== '-' ? ` - ${result.aDisplay}` : ''}\n`;
+      fileOutput += `    AAAA:       ${aaaaStatus}${result.aaaaDisplay !== '-' ? ` - ${result.aaaaDisplay}` : ''}\n`;
       fileOutput += `    MX:         ${result.mxDisplay}\n`;
       fileOutput += `    Nameserver: ${healthParts.NS || 'unknown'}\n`;
       fileOutput += `    SOA:        ${healthParts.SOA || 'unknown'}\n`;
@@ -130,8 +155,12 @@ export async function processDomains(data, originalSpf, flattenedSpf) {
       console.log(`    SPF:        ${result.spfStatus}`);
       console.log(`    DMARC:      ${result.dmarcStatus}`);
       console.log(`    DKIM:       ${result.dkimStatus}`);
-      console.log(`    A:          ${aStatus}${result.aDisplay !== '-' ? ` - ${  result.aDisplay}` : ''}`);
-      console.log(`    AAAA:       ${aaaaStatus}${result.aaaaDisplay !== '-' ? ` - ${  result.aaaaDisplay}` : ''}`);
+      console.log(
+        `    A:          ${aStatus}${result.aDisplay !== '-' ? ` - ${result.aDisplay}` : ''}`,
+      );
+      console.log(
+        `    AAAA:       ${aaaaStatus}${result.aaaaDisplay !== '-' ? ` - ${result.aaaaDisplay}` : ''}`,
+      );
       console.log(`    MX:         ${result.mxDisplay}`);
       console.log(`    Nameserver: ${healthParts.NS || 'unknown'}`);
       console.log(`    SOA:        ${healthParts.SOA || 'unknown'}`);
@@ -156,10 +185,19 @@ export async function processDomains(data, originalSpf, flattenedSpf) {
   console.log(`Expected DMARC: ${config.expectedDmarc}\n`);
 
   // Append SPF flattening information to the report
-  if (originalSpf && flattenedSpf) {
+  if (originalSpf && spfData) {
     fileOutput += '\n==============\nSPF Flattening\n==============\n\n';
     fileOutput += `Original:\n${originalSpf}\n\n`;
-    fileOutput += `Flattened:\n${flattenedSpf}\n`;
+
+    if (spfData.needsSplit) {
+      fileOutput += `Split into ${spfData.chunkRecords.length} chunks (to avoid DNS UDP fragmentation):\n\n`;
+      spfData.chunkRecords.forEach((chunk, index) => {
+        fileOutput += `Chunk ${index + 1} (_spf${index + 1}):\n${chunk}\n\n`;
+      });
+      fileOutput += `Main Record (_spf):\n${spfData.mainRecord}\n`;
+    } else {
+      fileOutput += `Flattened (single record):\n${spfData.mainRecord}\n`;
+    }
   }
 
   return { reportContent: fileOutput, hasFailures };
@@ -199,7 +237,9 @@ async function checkDomain(domainName, dkimConfig) {
       result.dkimStatus = 'skipped - not using AutoDNS nameservers';
 
       // Still get A/AAAA/MX records for display
-      console.log('  → Domain not using AutoDNS nameservers, skipping DNS updates');
+      console.log(
+        '  → Domain not using AutoDNS nameservers, skipping DNS updates',
+      );
       console.log(`  → Checking A/AAAA/MX for ${domainName}`);
       await getRecordsForDomain(domainName, result);
 
@@ -212,11 +252,14 @@ async function checkDomain(domainName, dkimConfig) {
 
     // Query SPF record
     console.log(`  → Checking SPF for ${domainName}`);
-    let spfNeedsUpdate = false, spfCurrentValue = '';
+    let spfNeedsUpdate = false,
+      spfCurrentValue = '';
     try {
       const currentSpf = await Promise.race([
         getSPFRecord(domainName),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('SPF query timeout')), 5000)),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('SPF query timeout')), 5000),
+        ),
       ]);
       if (currentSpf === config.expectedSpf) {
         result.spfCheckConsole = `${colors.green}✓${colors.reset}`;
@@ -244,7 +287,8 @@ async function checkDomain(domainName, dkimConfig) {
 
     // Query DMARC record
     console.log(`  → Checking DMARC for ${domainName}`);
-    let dmarcNeedsUpdate = false, dmarcCurrentValue = '';
+    let dmarcNeedsUpdate = false,
+      dmarcCurrentValue = '';
     try {
       const currentDmarc = await getDMARCRecord(domainName);
       const normalizedCurrent = normalizeDMARC(currentDmarc);
@@ -320,7 +364,10 @@ async function checkDomain(domainName, dkimConfig) {
     return result;
   } catch (error) {
     // Top-level catch for any unhandled error in checkDomain
-    console.error(`  ✗ Fatal error in checkDomain(${domainName}):`, error.message);
+    console.error(
+      `  ✗ Fatal error in checkDomain(${domainName}):`,
+      error.message,
+    );
     result.spfCheckConsole = `${colors.red}✗${colors.reset}`;
     result.spfRecord = 'Error';
     result.spfStatus = `error "${error.message}"`;
@@ -343,8 +390,9 @@ async function checkDomain(domainName, dkimConfig) {
  */
 async function checkDKIMForDomain(domainName, dkimConfig, result) {
   const desiredFromConfig = dkimConfig[domainName] || {};
-  const hasNonEmptyValues = Object.values(desiredFromConfig)
-    .some(v => v && v.trim() !== '');
+  const hasNonEmptyValues = Object.values(desiredFromConfig).some(
+    (v) => v && v.trim() !== '',
+  );
 
   if (Object.keys(desiredFromConfig).length === 0 || !hasNonEmptyValues) {
     result.dkimCheckConsole = `${colors.gray}-${colors.reset}`;
@@ -363,7 +411,7 @@ async function checkDKIMForDomain(domainName, dkimConfig, result) {
 
   if (dkimResults.length > 0) {
     result.dkimCheckConsole = `${colors.green}✓${colors.reset}`;
-    const selectors = dkimResults.map(r => r.selector).join(', ');
+    const selectors = dkimResults.map((r) => r.selector).join(', ');
     result.dkimInfo = `DKIM: Found (${selectors})`;
     result.dkimStatus = `ok - selectors: ${selectors}`;
   } else {
@@ -374,22 +422,30 @@ async function checkDKIMForDomain(domainName, dkimConfig, result) {
 
   // Ensure missing or mismatched selectors are created/updated
   for (const [selector, desiredValue] of Object.entries(desiredFromConfig)) {
-    if (!desiredValue || desiredValue.trim() === '') {continue;}
+    if (!desiredValue || desiredValue.trim() === '') {
+      continue;
+    }
 
-    const found = dkimResults.find(r => r.selector === selector);
+    const found = dkimResults.find((r) => r.selector === selector);
     const normalize = (s) => (s || '').replace(/\s+/g, ' ').trim();
 
     if (!found) {
-      const ok = await updateDomainDKIMRecord(domainName, selector,
-        desiredValue);
+      const ok = await updateDomainDKIMRecord(
+        domainName,
+        selector,
+        desiredValue,
+      );
       if (ok) {
         result.dkimStatus = `ok - created selector ${selector}`;
       } else {
         result.dkimStatus = `error "Failed to create selector ${selector}"`;
       }
     } else if (normalize(found.fullValue) !== normalize(desiredValue)) {
-      const ok = await updateDomainDKIMRecord(domainName, selector,
-        desiredValue);
+      const ok = await updateDomainDKIMRecord(
+        domainName,
+        selector,
+        desiredValue,
+      );
       if (ok) {
         result.dkimStatus = `ok - updated selector ${selector}`;
       } else {
@@ -407,8 +463,11 @@ async function checkDKIMForDomain(domainName, dkimConfig, result) {
 async function getRecordsForDomain(domainName, result) {
   try {
     const zoneInfo = await getZone(domainName);
-    if (zoneInfo.data && Array.isArray(zoneInfo.data) &&
-      zoneInfo.data.length > 0) {
+    if (
+      zoneInfo.data &&
+      Array.isArray(zoneInfo.data) &&
+      zoneInfo.data.length > 0
+    ) {
       const zone = zoneInfo.data[0];
 
       const aRecords = await getARecords(zone, domainName);
@@ -436,11 +495,14 @@ async function addHealthChecks(domainName, result) {
     const tls = await checkTlsRpt(domainName);
     const mxHosts = result.mxDisplay === '-' ? [] : result.mxDisplay.split(',');
     const mxInt = await checkMXIntegrity(domainName, mxHosts);
-    const ptr = mxHosts.length ? await checkPTRForOutbound(mxHosts[0]) : { ok: false };
+    const ptr = mxHosts.length
+      ? await checkPTRForOutbound(mxHosts[0])
+      : { ok: false };
 
     const status = { ns, soa, caa, mta, tls, mx: mxInt, ptr };
     result.healthSummary = buildHealthSummary(status);
   } catch {
-    result.healthSummary = 'NS:fail; SOA:fail; CAA:fail; MTA:fail; TLS:fail; PTR:fail';
+    result.healthSummary =
+      'NS:fail; SOA:fail; CAA:fail; MTA:fail; TLS:fail; PTR:fail';
   }
 }

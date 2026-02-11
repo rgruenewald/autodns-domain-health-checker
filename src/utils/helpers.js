@@ -4,6 +4,7 @@
 export const colors = {
   green: '\x1b[32m',
   red: '\x1b[31m',
+  yellow: '\x1b[33m',
   reset: '\x1b[0m',
   bold: '\x1b[1m',
   gray: '\x1b[90m',
@@ -19,7 +20,7 @@ export function formatTimestamp(date = new Date()) {
     date.getFullYear(),
     String(date.getMonth() + 1).padStart(2, '0'),
     String(date.getDate()).padStart(2, '0'),
-  ].join('-')  } ${  [
+  ].join('-')} ${[
     String(date.getHours()).padStart(2, '0'),
     String(date.getMinutes()).padStart(2, '0'),
     String(date.getSeconds()).padStart(2, '0'),
@@ -36,7 +37,7 @@ export function getTimestamp(date = new Date()) {
     date.getFullYear(),
     String(date.getMonth() + 1).padStart(2, '0'),
     String(date.getDate()).padStart(2, '0'),
-  ].join('')  }-${  [
+  ].join('')}-${[
     String(date.getHours()).padStart(2, '0'),
     String(date.getMinutes()).padStart(2, '0'),
     String(date.getSeconds()).padStart(2, '0'),
@@ -52,7 +53,9 @@ export function parseSummaryCounts(reportContent) {
   const lines = reportContent.split('\n');
 
   // Find all domain entries (lines with timestamp and domain name at start)
-  const domainLines = lines.filter(l => /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} /.test(l));
+  const domainLines = lines.filter((l) =>
+    /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} /.test(l),
+  );
 
   const countField = (fieldName, regex) => {
     let count = 0;
