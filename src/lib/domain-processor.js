@@ -78,6 +78,19 @@ export async function processDomains(data, originalSpf, spfData) {
   let fileOutput = '';
   let hasFailures = false;
 
+  // Track failures by type for summary
+  // MTA, TLS, PTR are informational only and not tracked here
+  const failuresByType = {
+    SPF: [],
+    DMARC: [],
+    DKIM: [],
+    A: [],
+    AAAA: [],
+    SOA: [],
+    NS: [],
+    CAA: [],
+  };
+
   // Load desired DKIM config
   const dkimConfig = await loadDkimConfig();
 
@@ -121,16 +134,41 @@ export async function processDomains(data, originalSpf, spfData) {
       const aStatus = result.aDisplay !== '-' ? 'ok' : 'fail';
       const aaaaStatus = result.aaaaDisplay !== '-' ? 'ok' : 'fail';
 
-      // Check for any failures or errors
+      // Collect failures by type
+      if (result.spfStatus === 'fail' || result.spfStatus === 'error') {
+        failuresByType.SPF.push(domainName);
+      }
+      if (result.dmarcStatus === 'fail' || result.dmarcStatus === 'error') {
+        failuresByType.DMARC.push(domainName);
+      }
+      if (result.dkimStatus === 'fail' || result.dkimStatus === 'error') {
+        failuresByType.DKIM.push(domainName);
+      }
+      if (aStatus === 'fail') {
+        failuresByType.A.push(domainName);
+      }
+      if (aaaaStatus === 'fail') {
+        failuresByType.AAAA.push(domainName);
+      }
+      if (healthParts.SOA === 'fail') {
+        failuresByType.SOA.push(domainName);
+      }
+      if (healthParts.NS === 'fail') {
+        failuresByType.NS.push(domainName);
+      }
+      if (healthParts.CAA === 'fail') {
+        failuresByType.CAA.push(domainName);
+      }
+
+      // Check for any failures or errors (SPF/DMARC/DKIM only;
+      // A/AAAA failures are informational and don't trigger email)
       if (
         result.spfStatus === 'fail' ||
         result.spfStatus === 'error' ||
         result.dmarcStatus === 'fail' ||
         result.dmarcStatus === 'error' ||
         result.dkimStatus === 'fail' ||
-        result.dkimStatus === 'error' ||
-        aStatus === 'fail' ||
-        aaaaStatus === 'fail'
+        result.dkimStatus === 'error'
       ) {
         hasFailures = true;
       }
@@ -183,6 +221,21 @@ export async function processDomains(data, originalSpf, spfData) {
 
   console.log(`\nExpected SPF: ${config.expectedSpf}`);
   console.log(`Expected DMARC: ${config.expectedDmarc}\n`);
+
+  // Append failure summary grouped by type
+  const failureTypes = Object.entries(failuresByType).filter(
+    ([, domains]) => domains.length > 0,
+  );
+  if (failureTypes.length > 0) {
+    fileOutput += '\n==================\nFailure Summary\n==================\n\n';
+    for (const [type, domains] of failureTypes) {
+      fileOutput += `${type} (${domains.length}):\n`;
+      for (const d of domains) {
+        fileOutput += `  - ${d}\n`;
+      }
+      fileOutput += '\n';
+    }
+  }
 
   // Append SPF flattening information to the report
   if (originalSpf && spfData) {
