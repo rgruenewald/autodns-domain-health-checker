@@ -160,15 +160,17 @@ export async function processDomains(data, originalSpf, spfData) {
         failuresByType.CAA.push(domainName);
       }
 
-      // Check for any failures or errors (SPF/DMARC/DKIM only;
-      // A/AAAA failures are informational and don't trigger email)
+      // Check for any failures or errors (SPF/DMARC/DKIM and A/AAAA;
+      // MTA, TLS, PTR are informational only and don't trigger email)
       if (
         result.spfStatus === 'fail' ||
         result.spfStatus === 'error' ||
         result.dmarcStatus === 'fail' ||
         result.dmarcStatus === 'error' ||
         result.dkimStatus === 'fail' ||
-        result.dkimStatus === 'error'
+        result.dkimStatus === 'error' ||
+        aStatus === 'fail' ||
+        aaaaStatus === 'fail'
       ) {
         hasFailures = true;
       }
