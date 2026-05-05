@@ -1,378 +1,95 @@
 # AutoDNS Domain Health Monitor
 
-A modular Node.js application to query and validate domain health from AutoDNS API. Checks SPF, DMARC, and DKIM records, automatically corrects misconfigurations, and sends email reports.
+Checks and automatically corrects SPF, DMARC, DKIM, and other DNS health records for domains via the AutoDNS API.
 
 ## Features
 
-- **SPF Record Validation**: Checks and updates SPF records, with automatic flattening of includes and DNS UDP-safe splitting
-- **DMARC Record Management**: Validates DMARC policies, creates/updates records, and adds external reporting authorization
-- **DKIM Record Discovery**: Detects DKIM selectors via DNS or zone enumeration, updates records from local config
-- **Email Reports**: Sends detailed plain-text reports via SMTP with summary counts
-- **Multi-Domain Support**: Tests specific domains with configurable filtering
-- **Automated Remediation**: Updates incorrect DNS records via AutoDNS API
-- **Modular Architecture**: Well-organized codebase with separation of concerns
-- **Unit Tests**: Comprehensive test coverage with Vitest
+- **SPF**: Validation, include flattening, automatic UDP-safe splitting
+- **DMARC**: Validation, creation/updates, external reporting authorization
+- **DKIM**: Selector detection via DNS/zone enumeration, sync with `dkim.config.json`
+- **Additional Checks**: NS, SOA, CAA, MTA-STS, TLS-RPT, PTR, MX
+- **Reports**: SMTP email delivery, file reports in `reports/`
+- **Dry-Run**: Audit mode without modifying AutoDNS
+- **Modular Architecture**: Clean module separation, Vitest test suite
 
-## Project Structure
+## Quick Start
 
-```
-domain-health-checker/
-├── src/
-│   ├── index.js                    # Main entry point
-│   ├── lib/
-│   │   ├── config.js               # Configuration management
-│   │   ├── autodns-client.js       # AutoDNS API client with rate limiting
-│   │   ├── dns-operations.js       # DNS resolution utilities
-│   │   ├── spf.js                  # SPF validation and flattening
-│   │   ├── dmarc.js                # DMARC validation and updates
-│   │   ├── dkim.js                 # DKIM checking and config management
-│   │   ├── domain-processor.js     # Domain checking orchestration
-│   │   └── reporting.js            # Report generation and email
-│   └── utils/
-│       └── helpers.js              # Utility functions (timestamps, colors)
-├── tests/
-│   ├── lib/
-│   │   ├── dmarc.test.js           # DMARC module tests
-│   │   └── spf.test.js             # SPF module tests
-│   └── utils/
-│       └── helpers.test.js         # Helper function tests
-├── index.js                        # Legacy entry point (deprecated)
-├── vitest.config.js                # Test configuration
-└── package.json                    # Dependencies and scripts
-```
-
-## Prerequisites
-
-- Node.js (version 14 or higher)
-- AutoDNS account with API access and zone management permissions
-- SMTP server access for email reports
-
-## Installation
-
-1. Clone or download this repository
-
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-
-3. Configure your credentials and settings:
-   ```bash
-   cp .env.example .env
-   ```
-
-4. Edit the `.env` file with your AutoDNS, SMTP, and domain policy settings (see Configuration below)
-
-5. (Optional) Create `dkim.config.json` to specify desired DKIM records per domain:
-   ```json
-   {
-     "example.com": {
-       "selector1": "v=DKIM1;k=rsa;p=MIGfMA0GCSqGSIb3DQEBAQUAA...",
-       "selector2": "v=DKIM1;k=rsa;p=MIGfMA0GCSqGSIb3DQEBAQUAA..."
-     }
-   }
-   ```
-
-## Usage
-
-Run manually with:
 ```bash
+npm install
+cp .env.example .env
+# edit .env and optionally dkim.config.json
 npm start
 ```
 
-For dry-run mode (no changes to AutoDNS):
+Dry-run: `npm start -- --dry-run` or set `DRY_RUN=true` in `.env`.
+
+## Docker (with Cron)
+
 ```bash
-npm start -- --dry-run
-```
-
-Or build and run with Docker:
-```bash
-docker-compose up --build
-```
-
-## Docker with Automated Scheduling
-
-The application can run as a Docker container with built-in cron scheduling. The container will:
-- Execute health checks twice daily (1:00 AM and 1:00 PM)
-- Auto-restart on system boot
-- Persist reports to the host filesystem
-
-### Setup
-
-1. **Configure environment variables**:
-   ```bash
-   cp .env.example .env
-   # Edit .env with your credentials
-   ```
-
-2. **Configure DKIM settings**:
-   ```bash
-   cp dkim.config.example.json dkim.config.json
-   # Edit dkim.config.json with your DKIM records
-   ```
-
-3. **Build and start the container**:
-   ```bash
-   docker-compose up -d --build
-   ```
-
-4. **Verify cron is running**:
-   ```bash
-   docker-compose logs
-   ```
-
-The container will now run automatically on system boot and execute health checks at 1:00 AM and 1:00 PM daily.
-
-### Cron Schedule Customization
-
-To change the schedule, edit the `crontab` file:
-```bash
-# Format: minute hour day month weekday command
-0 1 * * *    # Runs at 1:00 AM daily
-0 13 * * *   # Runs at 1:00 PM daily
-```
-
-After changing the schedule, rebuild the container:
-```bash
+cp .env.example .env
+cp dkim.config.example.json dkim.config.json
 docker-compose up -d --build
 ```
 
-### Monitoring
+Default cron: 1:00 AM and 1:00 PM. Edit `crontab`, then `docker-compose up -d --build`.
 
-View cron execution logs:
-```bash
-# View all logs
-docker-compose logs -f
-
-# View only cron execution logs
-tail -f reports/cron.log
-```
-
-### Manual Execution
-
-Run a check immediately without waiting for the scheduled time:
+Manual execution inside container:
 ```bash
 docker-compose exec domain-health-checker node src/index.js
 ```
 
-## Usage (Standalone)
+## Checks in Detail
 
-Run the application:
-```bash
-npm start
-```
+Each domain is summarized in a compact one-liner ending with `H:` followed by health flags.
 
-Run in dry-run mode (reports only, no changes to AutoDNS):
-```bash
-npm start -- --dry-run
-```
+| Check | Source | OK Criteria |
+|---|---|---|
+| **SPF** | DNS TXT apex | Matches expected policy; flattens includes, splits if >450 bytes |
+| **DMARC** | `_dmarc.<domain>` | Matches expected policy (whitespace-normalized) |
+| **DKIM** | `<selector>._domainkey.<domain>` | Selector present in `dkim.config.json` and value matches (empty = skipped) |
+| **A/AAAA/MX** | AutoDNS zone / DNS fallback | Display only |
+| **NS** | DNS NS | ≥2 NS and each hostname resolves to A/AAAA |
+| **SOA** | DNS SOA | Values within typical ranges |
+| **CAA** | DNS CAA | None present, or at least one `issue`/`issuewild` |
+| **MTA-STS** | `_mta-sts.<domain>` + HTTPS policy | TXT `v=STSv1` and policy reachable with `version: STSv1` |
+| **TLS-RPT** | `_smtp._tls.<domain>` | TXT contains `v=TLSRPTv1` and `rua=` |
+| **PTR** | Reverse DNS of first MX IP | PTR exists |
+| **MX** | DNS MX | At least 1 MX and each host resolves to A/AAAA |
 
-Or set `DRY_RUN=true` in your `.env` file.
+**Line-end report flags:** `H: NS:<ok/fail>; SOA:<ok/fail>; CAA:<ok/fail>; MTA:<ok/fail>; TLS:<ok/fail>; PTR:<ok/fail>`
 
-Run the legacy monolithic version:
-```bash
-npm run legacy
-```
+## Configuration (`.env`)
 
-The application will:
-- Query all domains from your AutoDNS account
-- Filter to test-specific domains (configurable in code)
-- Check SPF, DMARC, and DKIM records
-- Update incorrect or missing records automatically (unless in dry-run mode)
-- Generate a report and send it by email
+| Variable | Description |
+|---|---|
+| `AUTODNS_USER` / `AUTODNS_PASSWORD` | API credentials (required) |
+| `AUTODNS_CONTEXT` | API context (default: 4) |
+| `AUTODNS_API_URL` | API endpoint (default: `https://api.autodns.com/v1`) |
+| `DRY_RUN` | `true` = no changes (default: `false`) |
+| `MAIN_SPF_RECORD_NAME` / `MAIN_SPF_RECORD_VALUE` | Expected SPF records |
+| `EXPECTED_DMARC` / `DMARC_REPORT_AUTH_DOMAIN` | DMARC policy + reporting domain |
+| `DKIM_SELECTORS` | Comma-separated selectors |
+| `DKIM_CONFIG_PATH` | Path to JSON (default: `dkim.config.json`) |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_SECURE` / `SMTP_USER` / `SMTP_PASSWORD` | SMTP access |
+| `EMAIL_FROM` / `EMAIL_TO` / `EMAIL_SUBJECT` | Sender, recipient(s), subject |
 
-## Checks performed (domain health)
+## Tests
 
-Each domain is evaluated with a compact one-line summary and an additional
-health flag `H:` at the end. Below is what we check and how we decide ok/fail.
-
-1) SPF (Sender Policy Framework)
-- Source: DNS TXT for the zone apex
-- Pass when the current TXT record starting with `v=spf1` matches the
-   expected policy. The tool also builds a flattened SPF (resolves include:
-   and certain A/MX mechanisms) and updates `_spf.example.com` with it.
-- Remediation: auto-create/update SPF at apex (guarding against apex CNAME);
-   dry-run prevents changes.
-
-2) DMARC
-- Source: DNS TXT at `_dmarc.<domain>`
-- Normalization removes spaces after semicolons before comparing to the
-   expected policy.
-- Remediation: auto-create/update DMARC TXT; additionally creates the
-   external reporting authorization TXT under the configured
-   `DMARC_REPORT_AUTH_DOMAIN`.
-
-3) DKIM
-- Source: DNS TXT at `<selector>._domainkey.<domain>` and AutoDNS zone
-   enumeration as fallback.
-- Desired selectors/values are loaded from `dkim.config.json`. Empty values
-   are skipped and will show `DKIM: skipped`.
-- Remediation: auto-create/update missing or mismatched selectors with non-
-   empty desired values.
-
-4) DNS records (display only)
-- A/AAAA/MX at apex are shown from AutoDNS zone; if not present there, a
-   DNS lookup fallback is used (covers AutoDNS "main IP" cases).
-
-5) NS (delegation)
-- Source: DNS NS set at the domain
-- ok when there are at least 2 NS records and the NS hostnames resolve to
-   at least one A or AAAA address each.
-
-6) SOA sanity
-- Source: DNS SOA at the domain
-- ok when typical ranges are met (rough heuristic):
-   - refresh: 3600–86400
-   - retry: 300–7200
-   - expire: 604800–2419200
-   - minimum TTL: 60–86400
-
-7) CAA
-- Source: DNS CAA at the domain
-- ok if no CAA is present (optional) or at least one `issue`/`issuewild`
-   directive exists. If present but malformed, it shows as fail.
-
-8) MTA‑STS (mail transport security)
-- Source: DNS TXT `_mta-sts.<domain>` and HTTPS policy at
-   `https://mta-sts.<domain>/.well-known/mta-sts.txt`
-- ok when the TXT indicates `v=STSv1` and the policy file is reachable and
-   contains `version: STSv1` (HTTP 5s timeout).
-
-9) TLS‑RPT (SMTP TLS reporting)
-- Source: DNS TXT `_smtp._tls.<domain>`
-- ok when the TXT contains `v=TLSRPTv1` and a `rua=` destination.
-
-10) PTR for outbound (reverse DNS)
-- Source: First resolved IP of the first MX host (best-effort)
-- ok when a reverse PTR exists for that IP.
-
-11) MX integrity
-- Source: MX records at apex + A/AAAA resolution of each MX host
-- ok when there is at least one MX and every MX host resolves to A or AAAA
-   (≥2 MX is recommended but not enforced).
-
-Report format quick reference
-- Each domain line includes at the end: `H: NS:<ok|fail>; SOA:<ok|fail>;
-   CAA:<ok|fail>; MTA:<ok|fail>; TLS:<ok|fail>; PTR:<ok|fail>`.
-- SPF/DMARC/DKIM show `ok`, `needs-update`, or `error` details.
-- In dry-run mode the report is annotated and no AutoDNS changes are made.
-
-## Testing
-
-Run all tests:
 ```bash
 npm test
-```
-
-Run tests in watch mode:
-```bash
 npm run test:watch
-```
-
-Run tests with UI:
-```bash
-npm run test:ui
-```
-
-Run tests with coverage:
-```bash
 npm run test:coverage
 ```
 
-### Test Structure
-
-Tests are organized by module:
-- `tests/utils/helpers.test.js`: Utility function tests
-- `tests/lib/dmarc.test.js`: DMARC normalization tests
-- `tests/lib/spf.test.js`: SPF parsing and flattening tests
-
-Each test file validates the core functionality of its respective module without external dependencies.
-
-## Configuration
-
-All configuration is done through the `.env` file:
-
-### AutoDNS API
-- `AUTODNS_USER`: Your AutoDNS API username (required)
-- `AUTODNS_PASSWORD`: Your AutoDNS API password (required)
-- `AUTODNS_CONTEXT`: API context, usually 4 for production (default: 4)
-- `AUTODNS_API_URL`: AutoDNS API endpoint (default: https://api.autodns.com/v1)
-
-### Dry-Run Mode
-- `DRY_RUN`: Set to `true` to generate reports without making changes (default: `false`)
-
-### SPF Configuration
-- `MAIN_SPF_RECORD_NAME`: Name of the SPF record to update (e.g., `_spf.example.com`)
-- `MAIN_SPF_RECORD_VALUE`: Expected SPF record value
-
-### DMARC Configuration
-- `EXPECTED_DMARC`: Expected DMARC policy (no spaces after semicolons for strict compliance)
-- `DMARC_REPORT_AUTH_DOMAIN`: Domain under which to create external reporting authorization TXT records
-
-### DKIM Configuration
-- `DKIM_SELECTORS`: Comma-separated list of DKIM selectors to check (e.g., `s1,s2`)
-- `DKIM_CONFIG_PATH`: Path to JSON file with desired DKIM records per domain (default: `dkim.config.json`)
-
-### Email Configuration
-- `SMTP_HOST`: SMTP server hostname
-- `SMTP_PORT`: SMTP server port (e.g., 587)
-- `SMTP_SECURE`: Use TLS/SSL (true/false)
-- `SMTP_USER`: SMTP username
-- `SMTP_PASSWORD`: SMTP password
-- `EMAIL_FROM`: Sender email address
-- `EMAIL_TO`: Recipient email address(es) - supports comma-separated list for multiple recipients
-- `EMAIL_SUBJECT`: Email subject line
-
-## How It Works
-
-### SPF Validation
-- Queries SPF record for each domain
-- Compares to expected value
-- Updates if mismatch or missing
-- Flattens includes to prevent lookup limit issues
-- **Filters domain-contextual mechanisms**: Plain `a` and `mx` mechanisms are automatically filtered out during flattening since they reference the domain where they appear. Each domain should include these in its own SPF record (e.g., `v=spf1 a mx include:_spf.domain.com -all`)
-- **Automatic UDP-Safe Splitting**: If the flattened SPF record exceeds 450 bytes, it automatically splits the record into multiple chunks (e.g., `_spf1`, `_spf2`, `_spf3`) to avoid DNS UDP fragmentation (512 byte limit). Each chunk ends with `~all` (softfail) and the main SPF record (`_spf`) includes these chunks via `include:` statements with a final `-all` policy enforced at the top level
-- Guards against apex CNAME conflicts
-
-### DMARC Validation
-- Queries `_dmarc` TXT record
-- Normalizes spacing for comparison
-- Updates if policy mismatch or missing
-- Creates external reporting authorization TXT in specified domain (e.g., `domainname._report._dmarc.example.com`)
-
-### DKIM Detection
-- Checks DNS for configured selectors (e.g., `selector._domainkey.domain.com`)
-- Falls back to zone enumeration to discover any `*._domainkey` TXT records
-- Compares found selectors to desired config from `dkim.config.json`
-- Creates or updates selectors as needed
-
-### Email Reports
-- Generates summary with counts (SPF/DMARC/DKIM)
-- Includes full report content with timestamps and outcomes
-- Sends as plain-text body (not attachment)
-- Uses SMTP connection timeouts and verification to prevent hangs
-
-### Report Files
-- Stores reports in `reports/` directory
-- Automatic cleanup keeps last 30 reports
-- Includes SPF flattening logs
-
-## Security Note
-
-**Important**: Never commit your `.env` file to version control! The `.gitignore` file is configured to exclude it automatically.
-
-## API Documentation
-
-For more information about the AutoDNS API, visit:
-https://help.internetx.com/display/APIXMLEN/Domain+API
-
 ## Troubleshooting
 
-- **Authentication Error**: Verify AutoDNS credentials in `.env`
-- **Update Failures**: Check that your AutoDNS account has zone management permissions
-- **Email Not Sent**: Verify SMTP credentials and connection; check timeouts
-- **DKIM Not Found**: Ensure selectors are correct or use zone enumeration fallback
-- **SPF Update Conflict**: Check for apex CNAME records (incompatible with apex TXT)
+| Problem | Solution |
+|---|---|
+| Auth error | Check credentials in `.env` |
+| Update failure | Verify AutoDNS zone management permissions |
+| Email not sent | Check SMTP settings and timeouts |
+| DKIM not found | Verify selectors in `.env` / `dkim.config.json` |
+| SPF conflict | Apex CNAME prevents TXT record |
 
 ## License
 
