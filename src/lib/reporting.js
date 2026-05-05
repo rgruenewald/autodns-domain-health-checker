@@ -2,8 +2,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import nodemailer from 'nodemailer';
 import { config } from './config.js';
-import { colors, getTimestamp,
-  parseSummaryCounts } from '../utils/helpers.js';
+import { colors, getTimestamp } from '../utils/helpers.js';
 
 /**
  * Save report to file with automatic cleanup
@@ -74,28 +73,13 @@ export async function sendReportByEmail(reportContent) {
       socketTimeout: 10000,
     });
 
-    const counts = parseSummaryCounts(reportContent);
     const dryRunHeader = config.dryRun ? ' [DRY-RUN MODE]' : '';
     const dryRunBanner = config.dryRun
       ? '\n*** DRY-RUN MODE: No changes made to AutoDNS ***\n'
       : '';
 
     const emailBody = `AutoDNS Domain Health Report${dryRunHeader}
-Generated: ${new Date().toISOString().replace('T', ' ').substring(0, 19)}
-
-=======
-SUMMARY
-=======
-- SPF   (TOTAL: ${counts.total} | OK: ${counts.spf.ok} | FAILED: ${counts.spf.fail} | ERRORS: ${counts.spf.error} | SKIPPED: ${counts.spf.skipped})
-- DMARC (TOTAL: ${counts.total} | OK: ${counts.dmarc.ok} | FAILED: ${counts.dmarc.fail} | ERRORS: ${counts.dmarc.error} | SKIPPED: ${counts.dmarc.skipped})
-- DKIM  (TOTAL: ${counts.total} | OK: ${counts.dkim.ok} | FAILED: ${counts.dkim.fail} | ERRORS: ${counts.dkim.error} | SKIPPED: ${counts.dkim.skipped})${dryRunBanner}
-
-====================
-DOMAIN CHECK RESULTS
-====================
-
-Expected SPF:   ${config.expectedSpf}
-Expected DMARC: ${config.expectedDmarc}
+Generated: ${new Date().toISOString().replace('T', ' ').substring(0, 19)}${dryRunBanner}
 
 ${reportContent}
 `;

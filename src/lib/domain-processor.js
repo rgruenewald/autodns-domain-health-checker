@@ -75,7 +75,7 @@ export async function processDomains(data, originalSpf, spfData) {
   }
 
   // Build output for both console and file
-  let fileOutput = '';
+  let domainDetailsOutput = '';
   let hasFailures = false;
 
   // Track failures by type for summary
@@ -89,6 +89,15 @@ export async function processDomains(data, originalSpf, spfData) {
     SOA: [],
     NS: [],
     CAA: [],
+  };
+
+  const counts = {
+    total: domains.length,
+    spf: { ok: 0, fail: 0, error: 0, skipped: 0 },
+    dmarc: { ok: 0, fail: 0, error: 0, skipped: 0 },
+    dkim: { ok: 0, fail: 0, error: 0, skipped: 0 },
+    a: { ok: 0, fail: 0, error: 0, skipped: 0 },
+    aaaa: { ok: 0, fail: 0, error: 0, skipped: 0 },
   };
 
   // Load desired DKIM config
@@ -134,22 +143,48 @@ export async function processDomains(data, originalSpf, spfData) {
       const aStatus = result.aDisplay !== '-' ? 'ok' : 'fail';
       const aaaaStatus = result.aaaaDisplay !== '-' ? 'ok' : 'fail';
 
-      // Collect failures by type
-      if (result.spfStatus === 'fail' || result.spfStatus === 'error') {
+      // Collect failures by type and update counts
+      if (result.spfStatus.startsWith('ok')) {
+        counts.spf.ok++;
+      } else if (result.spfStatus.startsWith('fail')) {
+        counts.spf.fail++;
         failuresByType.SPF.push(domainName);
+      } else if (result.spfStatus.startsWith('error')) {
+        counts.spf.error++;
+        failuresByType.SPF.push(domainName);
+      } else if (result.spfStatus.startsWith('skipped')) {
+        counts.spf.skipped++;
       }
-      if (result.dmarcStatus === 'fail' || result.dmarcStatus === 'error') {
+
+      if (result.dmarcStatus.startsWith('ok')) {
+        counts.dmarc.ok++;
+      } else if (result.dmarcStatus.startsWith('fail')) {
+        counts.dmarc.fail++;
         failuresByType.DMARC.push(domainName);
+      } else if (result.dmarcStatus.startsWith('error')) {
+        counts.dmarc.error++;
+        failuresByType.DMARC.push(domainName);
+      } else if (result.dmarcStatus.startsWith('skipped')) {
+        counts.dmarc.skipped++;
       }
-      if (result.dkimStatus === 'fail' || result.dkimStatus === 'error') {
+
+      if (result.dkimStatus.startsWith('ok')) {
+        counts.dkim.ok++;
+      } else if (result.dkimStatus.startsWith('fail')) {
+        counts.dkim.fail++;
         failuresByType.DKIM.push(domainName);
+      } else if (result.dkimStatus.startsWith('error')) {
+        counts.dkim.error++;
+        failuresByType.DKIM.push(domainName);
+      } else if (result.dkimStatus.startsWith('skipped')) {
+        counts.dkim.skipped++;
       }
-      if (aStatus === 'fail') {
-        failuresByType.A.push(domainName);
-      }
-      if (aaaaStatus === 'fail') {
-        failuresByType.AAAA.push(domainName);
-      }
+
+      counts.a[aStatus === 'ok' ? 'ok' : 'fail']++;
+      if (aStatus === 'fail') failuresByType.A.push(domainName);
+      counts.aaaa[aaaaStatus === 'ok' ? 'ok' : 'fail']++;
+      if (aaaaStatus === 'fail') failuresByType.AAAA.push(domainName);
+
       if (healthParts.SOA === 'fail') {
         failuresByType.SOA.push(domainName);
       }
@@ -176,19 +211,19 @@ export async function processDomains(data, originalSpf, spfData) {
       }
 
       // Write multi-line format to file output
-      fileOutput += `${timestamp} ${domainName}\n`;
-      fileOutput += `    SPF:        ${result.spfStatus}\n`;
-      fileOutput += `    DMARC:      ${result.dmarcStatus}\n`;
-      fileOutput += `    DKIM:       ${result.dkimStatus}\n`;
-      fileOutput += `    A:          ${aStatus}${result.aDisplay !== '-' ? ` - ${result.aDisplay}` : ''}\n`;
-      fileOutput += `    AAAA:       ${aaaaStatus}${result.aaaaDisplay !== '-' ? ` - ${result.aaaaDisplay}` : ''}\n`;
-      fileOutput += `    MX:         ${result.mxDisplay}\n`;
-      fileOutput += `    Nameserver: ${healthParts.NS || 'unknown'}\n`;
-      fileOutput += `    SOA:        ${healthParts.SOA || 'unknown'}\n`;
-      fileOutput += `    CAA:        ${healthParts.CAA || 'unknown'}\n`;
-      fileOutput += `    MTA:        ${healthParts.MTA || 'unknown'}\n`;
-      fileOutput += `    TLS:        ${healthParts.TLS || 'unknown'}\n`;
-      fileOutput += `    PTR:        ${healthParts.PTR || 'unknown'}\n\n`;
+      domainDetailsOutput += `${timestamp} ${domainName}\n`;
+      domainDetailsOutput += `    SPF:        ${result.spfStatus}\n`;
+      domainDetailsOutput += `    DMARC:      ${result.dmarcStatus}\n`;
+      domainDetailsOutput += `    DKIM:       ${result.dkimStatus}\n`;
+      domainDetailsOutput += `    A:          ${aStatus}${result.aDisplay !== '-' ? ` - ${result.aDisplay}` : ''}\n`;
+      domainDetailsOutput += `    AAAA:       ${aaaaStatus}${result.aaaaDisplay !== '-' ? ` - ${result.aaaaDisplay}` : ''}\n`;
+      domainDetailsOutput += `    MX:         ${result.mxDisplay}\n`;
+      domainDetailsOutput += `    Nameserver: ${healthParts.NS || 'unknown'}\n`;
+      domainDetailsOutput += `    SOA:        ${healthParts.SOA || 'unknown'}\n`;
+      domainDetailsOutput += `    CAA:        ${healthParts.CAA || 'unknown'}\n`;
+      domainDetailsOutput += `    MTA:        ${healthParts.MTA || 'unknown'}\n`;
+      domainDetailsOutput += `    TLS:        ${healthParts.TLS || 'unknown'}\n`;
+      domainDetailsOutput += `    PTR:        ${healthParts.PTR || 'unknown'}\n\n`;
 
       // Print console output in same multi-line format
       console.log(`${timestamp} ${domainName}`);
@@ -214,9 +249,19 @@ export async function processDomains(data, originalSpf, spfData) {
       console.error(`${timestamp} ${domainName}`);
       console.error(`    ERROR: processing failed: ${msg}`);
       console.log(''); // Empty line
-      fileOutput += `${timestamp} ${domainName}\n`;
-      fileOutput += `    ERROR: processing failed: ${msg}\n\n`;
+      domainDetailsOutput += `${timestamp} ${domainName}\n`;
+      domainDetailsOutput += `    ERROR: processing failed: ${msg}\n\n`;
       hasFailures = true; // Mark as failure due to processing error
+      counts.spf.error++;
+      counts.dmarc.error++;
+      counts.dkim.error++;
+      counts.a.error++;
+      counts.aaaa.error++;
+      failuresByType.SPF.push(domainName);
+      failuresByType.DMARC.push(domainName);
+      failuresByType.DKIM.push(domainName);
+      failuresByType.A.push(domainName);
+      failuresByType.AAAA.push(domainName);
       // continue with next domain
     }
   }
@@ -224,38 +269,61 @@ export async function processDomains(data, originalSpf, spfData) {
   console.log(`\nExpected SPF: ${config.expectedSpf}`);
   console.log(`Expected DMARC: ${config.expectedDmarc}\n`);
 
-  // Append failure summary grouped by type
-  const failureTypes = Object.entries(failuresByType).filter(
-    ([, domains]) => domains.length > 0,
-  );
-  if (failureTypes.length > 0) {
-    fileOutput += '\n==================\nFailure Summary\n==================\n\n';
-    for (const [type, domains] of failureTypes) {
-      fileOutput += `${type} (${domains.length}):\n`;
+  // Build final report with 3 sections
+  let reportContent = '';
+
+  // Section 1: Summary
+  reportContent += '=======\nSUMMARY\n=======\n';
+  reportContent += `- SPF   (TOTAL: ${counts.total} | OK: ${counts.spf.ok} | FAILED: ${counts.spf.fail} | ERRORS: ${counts.spf.error} | SKIPPED: ${counts.spf.skipped})\n`;
+  reportContent += `- DMARC (TOTAL: ${counts.total} | OK: ${counts.dmarc.ok} | FAILED: ${counts.dmarc.fail} | ERRORS: ${counts.dmarc.error} | SKIPPED: ${counts.dmarc.skipped})\n`;
+  reportContent += `- DKIM  (TOTAL: ${counts.total} | OK: ${counts.dkim.ok} | FAILED: ${counts.dkim.fail} | ERRORS: ${counts.dkim.error} | SKIPPED: ${counts.dkim.skipped})\n`;
+  reportContent += `- A     (TOTAL: ${counts.total} | OK: ${counts.a.ok} | FAILED: ${counts.a.fail} | ERRORS: ${counts.a.error} | SKIPPED: ${counts.a.skipped})\n`;
+  reportContent += `- AAAA  (TOTAL: ${counts.total} | OK: ${counts.aaaa.ok} | FAILED: ${counts.aaaa.fail} | ERRORS: ${counts.aaaa.error} | SKIPPED: ${counts.aaaa.skipped})\n\n`;
+
+  // Section 2: Failure Details by Type
+  reportContent += '==================\nFailure Details by Type\n==================\n';
+  const reportFailureTypes = [
+    ['SPF', failuresByType.SPF],
+    ['DMARC', failuresByType.DMARC],
+    ['DKIM', failuresByType.DKIM],
+    ['A', failuresByType.A],
+    ['AAAA', failuresByType.AAAA],
+  ];
+  for (const [type, domains] of reportFailureTypes) {
+    reportContent += `${type} (${domains.length}):\n`;
+    if (domains.length === 0) {
+      reportContent += '  None\n';
+    } else {
       for (const d of domains) {
-        fileOutput += `  - ${d}\n`;
+        reportContent += `  - ${d}\n`;
       }
-      fileOutput += '\n';
     }
+    reportContent += '\n';
   }
+
+  // Section 3: Domain Check Results
+  reportContent += `Expected SPF:   ${config.expectedSpf}\n`;
+  reportContent += `Expected DMARC: ${config.expectedDmarc}\n\n`;
+  reportContent += '====================\nDOMAIN CHECK RESULTS\n====================\n\n';
+  reportContent += domainDetailsOutput;
 
   // Append SPF flattening information to the report
   if (originalSpf && spfData) {
-    fileOutput += '\n==============\nSPF Flattening\n==============\n\n';
-    fileOutput += `Original:\n${originalSpf}\n\n`;
+    reportContent += '\n==============\nSPF Flattening\n==============\n\n';
+    reportContent += `Original:\n${originalSpf}\n\n`;
 
     if (spfData.needsSplit) {
-      fileOutput += `Split into ${spfData.chunkRecords.length} chunks (to avoid DNS UDP fragmentation):\n\n`;
+      reportContent += `Split into ${spfData.chunkRecords.length} chunks (to avoid DNS UDP fragmentation):\n\n`;
       spfData.chunkRecords.forEach((chunk, index) => {
-        fileOutput += `Chunk ${index + 1} (_spf${index + 1}):\n${chunk}\n\n`;
+        reportContent += `Chunk ${index + 1} (_spf${index + 1}):\n${chunk}\n\n`;
       });
-      fileOutput += `Main Record (_spf):\n${spfData.mainRecord}\n`;
+      reportContent += `Main Record (_spf):\n${spfData.mainRecord}\n`;
     } else {
-      fileOutput += `Flattened (single record):\n${spfData.mainRecord}\n`;
+      reportContent += `Flattened (single record):\n${spfData.mainRecord}\n`;
     }
   }
 
-  return { reportContent: fileOutput, hasFailures };
+  return { reportContent, hasFailures };
 }
 
 /**
