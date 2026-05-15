@@ -144,41 +144,9 @@ export async function processDomains(data, originalSpf, spfData) {
       const aaaaStatus = result.aaaaDisplay !== '-' ? 'ok' : 'fail';
 
       // Collect failures by type and update counts
-      if (result.spfStatus.startsWith('ok')) {
-        counts.spf.ok++;
-      } else if (result.spfStatus.startsWith('fail')) {
-        counts.spf.fail++;
-        failuresByType.SPF.push(domainName);
-      } else if (result.spfStatus.startsWith('error')) {
-        counts.spf.error++;
-        failuresByType.SPF.push(domainName);
-      } else if (result.spfStatus.startsWith('skipped')) {
-        counts.spf.skipped++;
-      }
-
-      if (result.dmarcStatus.startsWith('ok')) {
-        counts.dmarc.ok++;
-      } else if (result.dmarcStatus.startsWith('fail')) {
-        counts.dmarc.fail++;
-        failuresByType.DMARC.push(domainName);
-      } else if (result.dmarcStatus.startsWith('error')) {
-        counts.dmarc.error++;
-        failuresByType.DMARC.push(domainName);
-      } else if (result.dmarcStatus.startsWith('skipped')) {
-        counts.dmarc.skipped++;
-      }
-
-      if (result.dkimStatus.startsWith('ok')) {
-        counts.dkim.ok++;
-      } else if (result.dkimStatus.startsWith('fail')) {
-        counts.dkim.fail++;
-        failuresByType.DKIM.push(domainName);
-      } else if (result.dkimStatus.startsWith('error')) {
-        counts.dkim.error++;
-        failuresByType.DKIM.push(domainName);
-      } else if (result.dkimStatus.startsWith('skipped')) {
-        counts.dkim.skipped++;
-      }
+      countCheckResult(result.spfStatus, 'spf', counts, failuresByType, domainName);
+      countCheckResult(result.dmarcStatus, 'dmarc', counts, failuresByType, domainName);
+      countCheckResult(result.dkimStatus, 'dkim', counts, failuresByType, domainName);
 
       counts.a[aStatus === 'ok' ? 'ok' : 'fail']++;
       if (aStatus === 'fail') failuresByType.A.push(domainName);
@@ -198,52 +166,21 @@ export async function processDomains(data, originalSpf, spfData) {
       // Check for any failures or errors (SPF/DMARC/DKIM and A/AAAA;
       // MTA, TLS, PTR are informational only and don't trigger email)
       if (
-        result.spfStatus === 'fail' ||
-        result.spfStatus === 'error' ||
-        result.dmarcStatus === 'fail' ||
-        result.dmarcStatus === 'error' ||
-        result.dkimStatus === 'fail' ||
-        result.dkimStatus === 'error' ||
+        isFailureStatus(result.spfStatus) ||
+        isFailureStatus(result.dmarcStatus) ||
+        isFailureStatus(result.dkimStatus) ||
         aStatus === 'fail' ||
         aaaaStatus === 'fail'
       ) {
         hasFailures = true;
       }
 
-      // Write multi-line format to file output
-      domainDetailsOutput += `${timestamp} ${domainName}\n`;
-      domainDetailsOutput += `    SPF:        ${result.spfStatus}\n`;
-      domainDetailsOutput += `    DMARC:      ${result.dmarcStatus}\n`;
-      domainDetailsOutput += `    DKIM:       ${result.dkimStatus}\n`;
-      domainDetailsOutput += `    A:          ${aStatus}${result.aDisplay !== '-' ? ` - ${result.aDisplay}` : ''}\n`;
-      domainDetailsOutput += `    AAAA:       ${aaaaStatus}${result.aaaaDisplay !== '-' ? ` - ${result.aaaaDisplay}` : ''}\n`;
-      domainDetailsOutput += `    MX:         ${result.mxDisplay}\n`;
-      domainDetailsOutput += `    Nameserver: ${healthParts.NS || 'unknown'}\n`;
-      domainDetailsOutput += `    SOA:        ${healthParts.SOA || 'unknown'}\n`;
-      domainDetailsOutput += `    CAA:        ${healthParts.CAA || 'unknown'}\n`;
-      domainDetailsOutput += `    MTA:        ${healthParts.MTA || 'unknown'}\n`;
-      domainDetailsOutput += `    TLS:        ${healthParts.TLS || 'unknown'}\n`;
-      domainDetailsOutput += `    PTR:        ${healthParts.PTR || 'unknown'}\n\n`;
-
-      // Print console output in same multi-line format
-      console.log(`${timestamp} ${domainName}`);
-      console.log(`    SPF:        ${result.spfStatus}`);
-      console.log(`    DMARC:      ${result.dmarcStatus}`);
-      console.log(`    DKIM:       ${result.dkimStatus}`);
-      console.log(
-        `    A:          ${aStatus}${result.aDisplay !== '-' ? ` - ${result.aDisplay}` : ''}`,
-      );
-      console.log(
-        `    AAAA:       ${aaaaStatus}${result.aaaaDisplay !== '-' ? ` - ${result.aaaaDisplay}` : ''}`,
-      );
-      console.log(`    MX:         ${result.mxDisplay}`);
-      console.log(`    Nameserver: ${healthParts.NS || 'unknown'}`);
-      console.log(`    SOA:        ${healthParts.SOA || 'unknown'}`);
-      console.log(`    CAA:        ${healthParts.CAA || 'unknown'}`);
-      console.log(`    MTA:        ${healthParts.MTA || 'unknown'}`);
-      console.log(`    TLS:        ${healthParts.TLS || 'unknown'}`);
-      console.log(`    PTR:        ${healthParts.PTR || 'unknown'}`);
-      console.log(''); // Empty line between domains
+      // Write output to both file and console
+      const detailLines = formatDomainResultLines(
+        timestamp, domainName, result, aStatus, aaaaStatus, healthParts);
+      domainDetailsOutput += detailLines.join('\n') + '\n\n';
+      detailLines.forEach((line) => console.log(line));
+      console.log('');
     } catch (err) {
       const msg = err?.message || String(err);
       console.error(`${timestamp} ${domainName}`);
@@ -282,14 +219,7 @@ export async function processDomains(data, originalSpf, spfData) {
 
   // Section 2: Failure Details by Type
   reportContent += '==================\nFailure Details by Type\n==================\n';
-  const reportFailureTypes = [
-    ['SPF', failuresByType.SPF],
-    ['DMARC', failuresByType.DMARC],
-    ['DKIM', failuresByType.DKIM],
-    ['A', failuresByType.A],
-    ['AAAA', failuresByType.AAAA],
-  ];
-  for (const [type, domains] of reportFailureTypes) {
+  for (const [type, domains] of Object.entries(failuresByType)) {
     reportContent += `${type} (${domains.length}):\n`;
     if (domains.length === 0) {
       reportContent += '  None\n';
@@ -324,6 +254,140 @@ export async function processDomains(data, originalSpf, spfData) {
   }
 
   return { reportContent, hasFailures };
+}
+
+/**
+ * Evaluate whether a DNS record matches the expected value and populate result.
+ *
+ * Handles the three-way branch: correct match, mismatch (value present but wrong),
+ * or missing (no record). Populates the result object's checkConsole, record, and
+ * status fields for the given label.
+ *
+ * @param {string|null} current - Current parsed value (normalized for comparison)
+ * @param {string} expected - Expected value (normalized)
+ * @param {'spf'|'dmarc'} label - Lowercase protocol label
+ * @param {Object} result - Check-domain result object (populated in place)
+ * @param {string} [displayValue] - Original value for display (falls back to current)
+ * @returns {{needsUpdate: boolean, currentValue: string}}
+ */
+function evaluateCheckResult(current, expected, label, result, displayValue) {
+  const shown = displayValue !== undefined ? displayValue : current;
+  const upper = label.toUpperCase();
+
+  if (current === expected) {
+    result[`${label}CheckConsole`] = `${colors.green}✓${colors.reset}`;
+    result[`${label}Record`] = `${upper}: Correct`;
+    result[`${label}Status`] = 'ok';
+    return { needsUpdate: false, currentValue: '' };
+  }
+
+  result[`${label}CheckConsole`] = `${colors.red}✗${colors.reset}`;
+  if (current) {
+    result[`${label}Record`] = `${upper}: ${shown}`;
+    result[`${label}Status`] = 'needs-update';
+    return { needsUpdate: true, currentValue: shown };
+  }
+  result[`${label}Record`] = `${upper}: No record`;
+  result[`${label}Status`] = 'needs-update';
+  return { needsUpdate: true, currentValue: `No ${upper} record` };
+}
+
+/**
+ * Return true if a status string represents a failure condition.
+ *
+ * Matches countCheckResult's classification: fail, error, and needs-update
+ * are failure states; ok and skipped are not.
+ *
+ * @param {string} status - A status string (e.g., 'fail "No records"', 'error "timeout"', 'needs-update')
+ * @returns {boolean}
+ */
+function isFailureStatus(status) {
+  return status.startsWith('fail') ||
+         status.startsWith('error') ||
+         status.startsWith('needs-update');
+}
+
+/**
+ * Tally a single check result into running counts and failure tracking.
+ *
+ * @param {string} statusField - The status string from the result (ok / fail / error / skipped / needs-update)
+ * @param {'spf'|'dmarc'|'dkim'} type - Protocol key for counts/failures
+ * @param {Object} counts - Running counts object
+ * @param {Object} failuresByType - Per-type failure domain lists
+ * @param {string} domainName - Current domain name
+ */
+function countCheckResult(statusField, type, counts, failuresByType, domainName) {
+  if (statusField.startsWith('ok')) {
+    counts[type].ok++;
+  } else if (statusField.startsWith('fail')) {
+    counts[type].fail++;
+    failuresByType[type.toUpperCase()].push(domainName);
+  } else if (statusField.startsWith('error')) {
+    counts[type].error++;
+    failuresByType[type.toUpperCase()].push(domainName);
+  } else if (statusField.startsWith('skipped')) {
+    counts[type].skipped++;
+  } else if (statusField.startsWith('needs-update')) {
+    counts[type].fail++;
+    failuresByType[type.toUpperCase()].push(domainName);
+  }
+}
+
+/**
+ * Attempt to apply a DNS record update and update status fields.
+ *
+ * @param {'spf'|'dmarc'} label - Lowercase protocol label
+ * @param {boolean} needsUpdate - Whether an update is required
+ * @param {Function} updateFn - Async function performing the update
+ * @param {string} currentValue - Previous value for status message
+ * @param {Object} result - Check-domain result object (populated in place)
+ */
+async function applyProtocolUpdate(label, needsUpdate, updateFn, currentValue, result) {
+  if (!needsUpdate) {
+    if (result[`${label}Status`] === 'error') {
+      result[`${label}Status`] = `error "${currentValue}"`;
+    }
+    return;
+  }
+
+  try {
+    await updateFn();
+    result[`${label}CheckConsole`] = `${colors.green}✓${colors.reset}(updated)`;
+    result[`${label}Record`] = `${label.toUpperCase()}: Correct (updated)`;
+    result[`${label}Status`] = `ok - updated from "${currentValue}"`;
+  } catch (error) {
+    result[`${label}CheckConsole`] = `${colors.red}✗${colors.reset}(failed)`;
+    result[`${label}Status`] = `error "Update failed: ${error.message}"`;
+  }
+}
+
+/**
+ * Build a consistent array of domain-check detail lines (for console and file output).
+ *
+ * @param {string} timestamp
+ * @param {string} domainName
+ * @param {Object} result
+ * @param {string} aStatus
+ * @param {string} aaaaStatus
+ * @param {Object} healthParts
+ * @returns {string[]}
+ */
+function formatDomainResultLines(timestamp, domainName, result, aStatus, aaaaStatus, healthParts) {
+  return [
+    `${timestamp} ${domainName}`,
+    `    SPF:        ${result.spfStatus}`,
+    `    DMARC:      ${result.dmarcStatus}`,
+    `    DKIM:       ${result.dkimStatus}`,
+    `    A:          ${aStatus}${result.aDisplay !== '-' ? ` - ${result.aDisplay}` : ''}`,
+    `    AAAA:       ${aaaaStatus}${result.aaaaDisplay !== '-' ? ` - ${result.aaaaDisplay}` : ''}`,
+    `    MX:         ${result.mxDisplay}`,
+    `    Nameserver: ${healthParts.NS || 'unknown'}`,
+    `    SOA:        ${healthParts.SOA || 'unknown'}`,
+    `    CAA:        ${healthParts.CAA || 'unknown'}`,
+    `    MTA:        ${healthParts.MTA || 'unknown'}`,
+    `    TLS:        ${healthParts.TLS || 'unknown'}`,
+    `    PTR:        ${healthParts.PTR || 'unknown'}`,
+  ];
 }
 
 /**
@@ -384,23 +448,10 @@ async function checkDomain(domainName, dkimConfig) {
           setTimeout(() => reject(new Error('SPF query timeout')), 5000),
         ),
       ]);
-      if (currentSpf === config.expectedSpf) {
-        result.spfCheckConsole = `${colors.green}✓${colors.reset}`;
-        result.spfRecord = 'SPF: Correct';
-        result.spfStatus = 'ok';
-      } else if (currentSpf) {
-        result.spfCheckConsole = `${colors.red}✗${colors.reset}`;
-        result.spfRecord = `SPF: ${currentSpf}`;
-        spfNeedsUpdate = true;
-        spfCurrentValue = currentSpf;
-        result.spfStatus = 'needs-update';
-      } else {
-        result.spfCheckConsole = `${colors.red}✗${colors.reset}`;
-        result.spfRecord = 'SPF: No record';
-        spfNeedsUpdate = true;
-        spfCurrentValue = 'No SPF record';
-        result.spfStatus = 'needs-update';
-      }
+      const spfEval = evaluateCheckResult(
+        currentSpf, config.expectedSpf, 'spf', result);
+      spfNeedsUpdate = spfEval.needsUpdate;
+      spfCurrentValue = spfEval.currentValue;
     } catch (error) {
       result.spfCheckConsole = `${colors.red}✗${colors.reset}`;
       result.spfRecord = `SPF Error: ${error.message}`;
@@ -417,23 +468,10 @@ async function checkDomain(domainName, dkimConfig) {
       const normalizedCurrent = normalizeDMARC(currentDmarc);
       const normalizedExpected = normalizeDMARC(config.expectedDmarc);
 
-      if (normalizedCurrent === normalizedExpected) {
-        result.dmarcCheckConsole = `${colors.green}✓${colors.reset}`;
-        result.dmarcRecord = 'DMARC: Correct';
-        result.dmarcStatus = 'ok';
-      } else if (currentDmarc) {
-        result.dmarcCheckConsole = `${colors.red}✗${colors.reset}`;
-        result.dmarcRecord = `DMARC: ${currentDmarc}`;
-        dmarcNeedsUpdate = true;
-        dmarcCurrentValue = currentDmarc;
-        result.dmarcStatus = 'needs-update';
-      } else {
-        result.dmarcCheckConsole = `${colors.red}✗${colors.reset}`;
-        result.dmarcRecord = 'DMARC: No record';
-        dmarcNeedsUpdate = true;
-        dmarcCurrentValue = 'No DMARC record';
-        result.dmarcStatus = 'needs-update';
-      }
+      const dmarcEval = evaluateCheckResult(
+        normalizedCurrent, normalizedExpected, 'dmarc', result, currentDmarc);
+      dmarcNeedsUpdate = dmarcEval.needsUpdate;
+      dmarcCurrentValue = dmarcEval.currentValue;
     } catch (error) {
       result.dmarcCheckConsole = `${colors.red}✗${colors.reset}`;
       result.dmarcRecord = `DMARC Error: ${error.message}`;
@@ -446,35 +484,17 @@ async function checkDomain(domainName, dkimConfig) {
     await checkDKIMForDomain(domainName, dkimConfig, result);
 
     // Update SPF record if needed
-    if (spfNeedsUpdate) {
-      try {
-        await updateDomainSPFRecord(domainName, config.expectedSpf);
-        result.spfCheckConsole = `${colors.green}✓${colors.reset}(updated)`;
-        result.spfRecord = 'SPF: Correct (updated)';
-        result.spfStatus = `ok - updated from "${spfCurrentValue}"`;
-      } catch (error) {
-        result.spfCheckConsole = `${colors.red}✗${colors.reset}(failed)`;
-        result.spfStatus = `error "Update failed: ${error.message}"`;
-      }
-    } else if (result.spfStatus === 'error') {
-      result.spfStatus = `error "${spfCurrentValue}"`;
-    }
+    await applyProtocolUpdate('spf', spfNeedsUpdate,
+      () => updateDomainSPFRecord(domainName, config.expectedSpf),
+      spfCurrentValue, result);
 
     // Update DMARC record if needed
-    if (dmarcNeedsUpdate) {
-      try {
+    await applyProtocolUpdate('dmarc', dmarcNeedsUpdate,
+      async () => {
         await addDMARCReportAuthRecord(domainName);
         await updateDomainDMARCRecord(domainName, config.expectedDmarc);
-        result.dmarcCheckConsole = `${colors.green}✓${colors.reset}(updated)`;
-        result.dmarcRecord = 'DMARC: Correct (updated)';
-        result.dmarcStatus = `ok - updated from "${dmarcCurrentValue}"`;
-      } catch (error) {
-        result.dmarcCheckConsole = `${colors.red}✗${colors.reset}(failed)`;
-        result.dmarcStatus = `error "Update failed: ${error.message}"`;
-      }
-    } else if (result.dmarcStatus === 'error') {
-      result.dmarcStatus = `error "${dmarcCurrentValue}"`;
-    }
+      },
+      dmarcCurrentValue, result);
 
     // Get A/AAAA/MX records
     console.log(`  → Checking A/AAAA/MX for ${domainName}`);

@@ -4,14 +4,47 @@ import {
   splitMechanismsIntoChunks,
 } from '../../src/lib/spf.js';
 
+/**
+ * Generate an array of SPF ip4 mechanisms for testing.
+ * @param {number} count
+ * @returns {string[]}
+ */
+function generateIP4Mechanisms(count) {
+  const mechanisms = [];
+  for (let i = 0; i < count; i++) {
+    mechanisms.push(`ip4:192.168.1.${i}`);
+  }
+  return mechanisms;
+}
+
+/**
+ * Assert every chunk produces a record within the given size limit.
+ * @param {string[][]} chunks
+ * @param {number} maxSize
+ */
+function expectChunksWithinLimit(chunks, maxSize) {
+  chunks.forEach((chunk) => {
+    const recordSize = 'v=spf1 '.length + chunk.join(' ').length;
+    expect(recordSize).toBeLessThanOrEqual(maxSize);
+  });
+}
+
+/**
+ * Helper: resolve SPF and assert that plain 'a'/'mx' are filtered out.
+ * @param {string} spf
+ * @returns {Promise<Object>} Parsed resolveSpfIncludes result
+ */
+async function resolveAndAssertNoAMx(spf) {
+  const result = await resolveSpfIncludes(spf);
+  expect(result.mechanisms).not.toContain('a');
+  expect(result.mechanisms).not.toContain('mx');
+  return result;
+}
+
 describe('resolveSpfIncludes', () => {
   it('should parse basic SPF mechanisms', async () => {
-    const spf = 'v=spf1 a mx ip4:192.168.1.1 -all';
-    const result = await resolveSpfIncludes(spf);
+    const result = await resolveAndAssertNoAMx('v=spf1 a mx ip4:192.168.1.1 -all');
 
-    // Plain 'a' and 'mx' are filtered out during flattening
-    expect(result.mechanisms).not.toContain('a');
-    expect(result.mechanisms).not.toContain('mx');
     expect(result.mechanisms).toContain('ip4:192.168.1.1');
     expect(result.modifiers).toContain('-all');
   });
@@ -45,12 +78,8 @@ describe('resolveSpfIncludes', () => {
   });
 
   it('should not resolve plain a or mx mechanisms', async () => {
-    const spf = 'v=spf1 a mx -all';
-    const result = await resolveSpfIncludes(spf);
+    const result = await resolveAndAssertNoAMx('v=spf1 a mx -all');
 
-    // Plain 'a' and 'mx' should be skipped during flattening for shared records
-    expect(result.mechanisms).not.toContain('a');
-    expect(result.mechanisms).not.toContain('mx');
     expect(result.mechanisms).toEqual([]);
   });
 
@@ -91,37 +120,19 @@ describe('splitMechanismsIntoChunks', () => {
   });
 
   it('should split large records into multiple chunks', () => {
-    // Create many mechanisms that will exceed 450 bytes
-    const mechanisms = [];
-    for (let i = 0; i < 50; i++) {
-      mechanisms.push(`ip4:192.168.1.${i}`);
-    }
-
+    const mechanisms = generateIP4Mechanisms(50);
     const chunks = splitMechanismsIntoChunks(mechanisms, 450);
 
     expect(chunks.length).toBeGreaterThan(1);
-
-    // Verify each chunk is under the limit
-    chunks.forEach((chunk) => {
-      const recordSize = 'v=spf1 '.length + chunk.join(' ').length;
-      expect(recordSize).toBeLessThanOrEqual(450);
-    });
+    expectChunksWithinLimit(chunks, 450);
   });
 
   it('should respect custom chunk size', () => {
-    const mechanisms = [];
-    for (let i = 0; i < 20; i++) {
-      mechanisms.push(`ip4:192.168.1.${i}`);
-    }
-
+    const mechanisms = generateIP4Mechanisms(20);
     const chunks = splitMechanismsIntoChunks(mechanisms, 100);
 
     expect(chunks.length).toBeGreaterThan(1);
-
-    chunks.forEach((chunk) => {
-      const recordSize = 'v=spf1 '.length + chunk.join(' ').length;
-      expect(recordSize).toBeLessThanOrEqual(100);
-    });
+    expectChunksWithinLimit(chunks, 100);
   });
 
   it('should handle single very long mechanism', () => {

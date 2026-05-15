@@ -45,7 +45,7 @@ export async function usesAutoDNSNameservers(domain) {
   }
 }
 
-export function checkSOASanity(soa) {
+function checkSOASanity(soa) {
   if (!soa) {return { ok: false, reason: 'no-soa' };}
   const { refresh, retry, expire, minttl } = soa;
   // sane ranges (very rough)

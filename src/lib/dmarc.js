@@ -1,5 +1,5 @@
-import { resolveTxt } from './dns-operations.js';
-import { getZone, updateZone } from './autodns-client.js';
+import { resolveTxtRecord } from './dns-operations.js';
+import { updateZone, getAndValidateZone } from './autodns-client.js';
 import { config } from './config.js';
 import { logger } from '../utils/logger.js';
 
@@ -9,20 +9,7 @@ import { logger } from '../utils/logger.js';
  * @returns {Promise<string|null>} DMARC record or null
  */
 export async function getDMARCRecord(domain) {
-  try {
-    const dmarcDomain = `_dmarc.${domain}`;
-    const records = await resolveTxt(dmarcDomain);
-    const dmarcRecords = records
-      .map(record => record.join(''))
-      .filter(record => record.startsWith('v=DMARC1'));
-
-    return dmarcRecords.length > 0 ? dmarcRecords[0] : null;
-  } catch (error) {
-    if (error.code === 'ENODATA' || error.code === 'ENOTFOUND') {
-      return null;
-    }
-    throw error;
-  }
+  return resolveTxtRecord(domain, 'v=DMARC1', '_dmarc');
 }
 
 /**
@@ -44,21 +31,10 @@ export function normalizeDMARC(dmarc) {
  */
 export async function updateDomainDMARCRecord(domainName, dmarcValue) {
   try {
-    // Get current zone data
-    const zoneInfo = await getZone(domainName);
-
-    if (!zoneInfo.data || !Array.isArray(zoneInfo.data) ||
-      zoneInfo.data.length === 0) {
-      throw new Error('Invalid zone data received');
-    }
-
-    const zone = zoneInfo.data[0];
+    const zone = await getAndValidateZone(domainName);
 
     // Find existing DMARC record (_dmarc) or create new one
     let recordFound = false;
-    if (!zone.resourceRecords) {
-      zone.resourceRecords = [];
-    }
 
     for (const record of zone.resourceRecords) {
       if (record.type === 'TXT' && record.name === '_dmarc') {
@@ -102,21 +78,10 @@ export async function addDMARCReportAuthRecord(domainName) {
   const recordValue = 'v=DMARC1';
 
   try {
-    // Get current zone data
-    const zoneInfo = await getZone(config.dmarcReportAuthDomain);
-
-    if (!zoneInfo.data || !Array.isArray(zoneInfo.data) ||
-      zoneInfo.data.length === 0) {
-      throw new Error('Invalid zone data received');
-    }
-
-    const zone = zoneInfo.data[0];
+    const zone = await getAndValidateZone(config.dmarcReportAuthDomain);
 
     // Check if record already exists
     let recordFound = false;
-    if (!zone.resourceRecords) {
-      zone.resourceRecords = [];
-    }
 
     for (const record of zone.resourceRecords) {
       if (record.type === 'TXT' && record.name === recordName) {

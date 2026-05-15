@@ -5,7 +5,7 @@ import { logger } from '../utils/logger.js';
 export const resolveTxt = promisify(dns.resolveTxt);
 export const resolve4 = promisify(dns.resolve4);
 export const resolve6 = promisify(dns.resolve6);
-export const resolveMx = promisify(dns.resolveMx);
+const resolveMx = promisify(dns.resolveMx);
 export const resolveNs = promisify(dns.resolveNs);
 export const resolveSoa = promisify(dns.resolveSoa);
 export const resolveCaa = promisify(dns.resolveCaa);
@@ -149,6 +149,33 @@ export async function getMXRecords(zone, domainName) {
   }
 
   return mxRecords;
+}
+
+/**
+ * Resolve a TXT record for a (sub)domain matching a prefix.
+ *
+ * Shared by SPF and DMARC lookups to eliminate duplicated
+ * resolveTxt → join → filter → handle ENODATA/ENOTFOUND logic.
+ *
+ * @param {string} domain - Base domain name
+ * @param {string} prefix - Record value prefix to match (e.g. 'v=spf1', 'v=DMARC1')
+ * @param {string} [subPrefix=''] - Optional subdomain prefix (e.g. '_dmarc')
+ * @returns {Promise<string|null>} First matching TXT record or null
+ */
+export async function resolveTxtRecord(domain, prefix, subPrefix = '') {
+  try {
+    const query = subPrefix ? `${subPrefix}.${domain}` : domain;
+    const records = await resolveTxt(query);
+    const matches = records
+      .map((r) => r.join(''))
+      .filter((r) => r.startsWith(prefix));
+    return matches.length > 0 ? matches[0] : null;
+  } catch (error) {
+    if (error.code === 'ENODATA' || error.code === 'ENOTFOUND') {
+      return null;
+    }
+    throw error;
+  }
 }
 
 /**

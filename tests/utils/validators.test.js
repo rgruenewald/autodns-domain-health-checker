@@ -10,6 +10,17 @@ import {
   sanitizeDomainName,
 } from '../../src/utils/validators.js';
 
+/**
+ * Assert a function throws TypeError for non-string primitives.
+ * @param {Function} fn - Function to test
+ * @param {Array<Array>} invalidCalls - Arrays of arguments to call fn with that should throw
+ */
+function assertTypeErrors(fn, invalidCalls) {
+  for (const args of invalidCalls) {
+    expect(() => fn(...args)).toThrow(TypeError);
+  }
+}
+
 describe('validators', () => {
   describe('isValidDomainName', () => {
     it('should validate correct domain names', () => {
@@ -31,9 +42,7 @@ describe('validators', () => {
     });
 
     it('should throw TypeError for non-string input', () => {
-      expect(() => isValidDomainName(123)).toThrow(TypeError);
-      expect(() => isValidDomainName(null)).toThrow(TypeError);
-      expect(() => isValidDomainName(undefined)).toThrow(TypeError);
+      assertTypeErrors(isValidDomainName, [[123], [null], [undefined]]);
     });
   });
 
@@ -55,8 +64,7 @@ describe('validators', () => {
     });
 
     it('should throw TypeError for non-string input', () => {
-      expect(() => isValidEmail(123)).toThrow(TypeError);
-      expect(() => isValidEmail(null)).toThrow(TypeError);
+      assertTypeErrors(isValidEmail, [[123], [null]]);
     });
   });
 
@@ -76,8 +84,7 @@ describe('validators', () => {
     });
 
     it('should throw TypeError for non-string input', () => {
-      expect(() => isSafeFilePath(123, '/app')).toThrow(TypeError);
-      expect(() => isSafeFilePath('./file', 123)).toThrow(TypeError);
+      assertTypeErrors(isSafeFilePath, [[123, '/app'], ['./file', 123]]);
     });
   });
 
@@ -148,8 +155,7 @@ describe('validators', () => {
     });
 
     it('should throw TypeError for non-string input', () => {
-      expect(() => isSafeDNSValue(123)).toThrow(TypeError);
-      expect(() => isSafeDNSValue(null)).toThrow(TypeError);
+      assertTypeErrors(isSafeDNSValue, [[123], [null]]);
     });
   });
 
@@ -186,8 +192,7 @@ describe('validators', () => {
     });
 
     it('should throw TypeError for non-string input', () => {
-      expect(() => sanitizeDomainName(123)).toThrow(TypeError);
-      expect(() => sanitizeDomainName(null)).toThrow(TypeError);
+      assertTypeErrors(sanitizeDomainName, [[123], [null]]);
     });
   });
 });

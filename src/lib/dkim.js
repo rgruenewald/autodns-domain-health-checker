@@ -1,7 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { resolveTxt } from './dns-operations.js';
-import { getZone, updateZone } from './autodns-client.js';
+import { updateZone, getAndValidateZone } from './autodns-client.js';
 import { config } from './config.js';
 import { logger } from '../utils/logger.js';
 
@@ -55,12 +55,7 @@ export async function checkDKIMRecords(domain) {
  */
 export async function listZoneDKIMRecords(domainName) {
   try {
-    const zoneInfo = await getZone(domainName);
-    if (!zoneInfo.data || !Array.isArray(zoneInfo.data) ||
-      zoneInfo.data.length === 0) {
-      return [];
-    }
-    const zone = zoneInfo.data[0];
+    const zone = await getAndValidateZone(domainName);
     const out = [];
     for (const rr of zone.resourceRecords || []) {
       if (rr.type === 'TXT' && typeof rr.name === 'string' &&
@@ -136,15 +131,7 @@ export async function saveDkimConfig(dkimConfig) {
 export async function updateDomainDKIMRecord(domainName, selector,
   dkimValue) {
   try {
-    // Load zone data
-    const zoneInfo = await getZone(domainName);
-    if (!zoneInfo.data || !Array.isArray(zoneInfo.data) ||
-      zoneInfo.data.length === 0) {
-      throw new Error('Invalid zone data received');
-    }
-
-    const zone = zoneInfo.data[0];
-    if (!zone.resourceRecords) {zone.resourceRecords = [];}
+    const zone = await getAndValidateZone(domainName);
 
     const recordName = `${selector}._domainkey`;
     let updated = false;

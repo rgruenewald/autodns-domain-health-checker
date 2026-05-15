@@ -15,6 +15,28 @@ vi.mock('dns', () => ({
   },
 }));
 
+// --- Mock helpers to reduce duplication across test cases ---
+function mockResolve4(ips) {
+  dns.default.resolve4.mockImplementation((name, callback) => {
+    callback(null, ips);
+  });
+}
+function mockResolve4Error() {
+  dns.default.resolve4.mockImplementation((name, callback) => {
+    callback(new Error('No A records'), null);
+  });
+}
+function mockResolve6(ips) {
+  dns.default.resolve6.mockImplementation((name, callback) => {
+    callback(null, ips);
+  });
+}
+function mockResolve6Error() {
+  dns.default.resolve6.mockImplementation((name, callback) => {
+    callback(new Error('No AAAA records'), null);
+  });
+}
+
 describe('dns-operations', () => {
   let dnsOps;
 
@@ -58,48 +80,32 @@ describe('dns-operations', () => {
 
   describe('resolveHostToIPs', () => {
     it('should resolve IPv4 addresses', async () => {
-      dns.default.resolve4.mockImplementation((name, callback) => {
-        callback(null, ['192.0.2.1', '192.0.2.2']);
-      });
-      dns.default.resolve6.mockImplementation((name, callback) => {
-        callback(new Error('No AAAA records'), null);
-      });
+      mockResolve4(['192.0.2.1', '192.0.2.2']);
+      mockResolve6Error();
 
       const result = await dnsOps.resolveHostToIPs('example.com');
       expect(result).toEqual(['ip4:192.0.2.1', 'ip4:192.0.2.2']);
     });
 
     it('should resolve IPv6 addresses', async () => {
-      dns.default.resolve4.mockImplementation((name, callback) => {
-        callback(new Error('No A records'), null);
-      });
-      dns.default.resolve6.mockImplementation((name, callback) => {
-        callback(null, ['2001:db8::1', '2001:db8::2']);
-      });
+      mockResolve4Error();
+      mockResolve6(['2001:db8::1', '2001:db8::2']);
 
       const result = await dnsOps.resolveHostToIPs('example.com');
       expect(result).toEqual(['ip6:2001:db8::1', 'ip6:2001:db8::2']);
     });
 
     it('should resolve both IPv4 and IPv6 addresses', async () => {
-      dns.default.resolve4.mockImplementation((name, callback) => {
-        callback(null, ['192.0.2.1']);
-      });
-      dns.default.resolve6.mockImplementation((name, callback) => {
-        callback(null, ['2001:db8::1']);
-      });
+      mockResolve4(['192.0.2.1']);
+      mockResolve6(['2001:db8::1']);
 
       const result = await dnsOps.resolveHostToIPs('example.com');
       expect(result).toEqual(['ip4:192.0.2.1', 'ip6:2001:db8::1']);
     });
 
     it('should return empty array when no records exist', async () => {
-      dns.default.resolve4.mockImplementation((name, callback) => {
-        callback(new Error('No A records'), null);
-      });
-      dns.default.resolve6.mockImplementation((name, callback) => {
-        callback(new Error('No AAAA records'), null);
-      });
+      mockResolve4Error();
+      mockResolve6Error();
 
       const result = await dnsOps.resolveHostToIPs('example.com');
       expect(result).toEqual([]);
@@ -125,9 +131,7 @@ describe('dns-operations', () => {
         }
       });
 
-      dns.default.resolve6.mockImplementation((name, callback) => {
-        callback(new Error('No AAAA'), null);
-      });
+      mockResolve6Error();
 
       const result = await dnsOps.resolveMxToIPs('example.com');
       expect(result).toEqual(['ip4:192.0.2.1', 'ip4:192.0.2.2']);
@@ -146,141 +150,88 @@ describe('dns-operations', () => {
       dns.default.resolveMx.mockImplementation((domain, callback) => {
         callback(null, [{ exchange: 'mail.example.com', priority: 10 }]);
       });
-
-      dns.default.resolve4.mockImplementation((name, callback) => {
-        callback(new Error('No A records'), null);
-      });
-
-      dns.default.resolve6.mockImplementation((name, callback) => {
-        callback(new Error('No AAAA records'), null);
-      });
+      mockResolve4Error();
+      mockResolve6Error();
 
       const result = await dnsOps.resolveMxToIPs('example.com');
       expect(result).toEqual([]);
     });
   });
 
-  describe('getARecords', () => {
-    it('should return A records from zone data', async () => {
-      const zone = {
-        resourceRecords: [
-          { type: 'A', name: '', value: '192.0.2.1' },
-          { type: 'A', name: '@', value: '192.0.2.2' },
-          { type: 'A', name: 'www', value: '192.0.2.3' },
-        ],
-      };
-
-      const result = await dnsOps.getARecords(zone, 'example.com');
-      expect(result).toEqual(['192.0.2.1', '192.0.2.2']);
+  describe.each([
+    {
+      label: 'getARecords',
+      fn: 'getARecords',
+      records: [
+        { type: 'A', name: '', value: '192.0.2.1' },
+        { type: 'A', name: '@', value: '192.0.2.2' },
+        { type: 'A', name: 'www', value: '192.0.2.3' },
+      ],
+      expected: ['192.0.2.1', '192.0.2.2'],
+      expectedFallback: ['192.0.2.100'],
+      mockFallback: () => mockResolve4(['192.0.2.100']),
+      mockError: mockResolve4Error,
+    },
+    {
+      label: 'getAAAARecords',
+      fn: 'getAAAARecords',
+      records: [
+        { type: 'AAAA', name: '', value: '2001:db8::1' },
+        { type: 'AAAA', name: '@', value: '2001:db8::2' },
+        { type: 'AAAA', name: 'www', value: '2001:db8::3' },
+      ],
+      expected: ['2001:db8::1', '2001:db8::2'],
+      expectedFallback: ['2001:db8::100'],
+      mockFallback: () => mockResolve6(['2001:db8::100']),
+      mockError: mockResolve6Error,
+    },
+    {
+      label: 'getMXRecords',
+      fn: 'getMXRecords',
+      records: [
+        { type: 'MX', name: '', value: 'mail1.example.com' },
+        { type: 'MX', name: '@', value: 'mail2.example.com' },
+        { type: 'MX', name: 'subdomain', value: 'mail3.example.com' },
+      ],
+      expected: ['mail1.example.com', 'mail2.example.com'],
+      expectedFallback: ['mail.example.com'],
+      mockFallback: () => {
+        dns.default.resolveMx.mockImplementation((domain, callback) => {
+          callback(null, [{ exchange: 'mail.example.com', priority: 10 }]);
+        });
+      },
+      mockError: () => {
+        dns.default.resolveMx.mockImplementation((domain, callback) => {
+          callback(new Error('No MX records'), null);
+        });
+      },
+    },
+  ])('$label', ({ fn, records, expected, expectedFallback, mockFallback, mockError }) => {
+    it('should return records from zone data', async () => {
+      const zone = { resourceRecords: records };
+      const result = await dnsOps[fn](zone, 'example.com');
+      expect(result).toEqual(expected);
     });
 
     it('should fallback to DNS resolution when no zone records', async () => {
       const zone = { resourceRecords: [] };
-
-      dns.default.resolve4.mockImplementation((name, callback) => {
-        callback(null, ['192.0.2.100']);
-      });
-
-      const result = await dnsOps.getARecords(zone, 'example.com');
-      expect(result).toEqual(['192.0.2.100']);
+      mockFallback();
+      const result = await dnsOps[fn](zone, 'example.com');
+      expect(result).toEqual(expectedFallback);
     });
 
-    it('should return empty array when no A records exist', async () => {
+    it('should return empty array when no records exist', async () => {
       const zone = { resourceRecords: [] };
-
-      dns.default.resolve4.mockImplementation((name, callback) => {
-        callback(new Error('No A records'), null);
-      });
-
-      const result = await dnsOps.getARecords(zone, 'example.com');
-      expect(result).toEqual([]);
-    });
-  });
-
-  describe('getAAAARecords', () => {
-    it('should return AAAA records from zone data', async () => {
-      const zone = {
-        resourceRecords: [
-          { type: 'AAAA', name: '', value: '2001:db8::1' },
-          { type: 'AAAA', name: '@', value: '2001:db8::2' },
-          { type: 'AAAA', name: 'www', value: '2001:db8::3' },
-        ],
-      };
-
-      const result = await dnsOps.getAAAARecords(zone, 'example.com');
-      expect(result).toEqual(['2001:db8::1', '2001:db8::2']);
-    });
-
-    it('should fallback to DNS resolution when no zone records', async () => {
-      const zone = { resourceRecords: [] };
-
-      dns.default.resolve6.mockImplementation((name, callback) => {
-        callback(null, ['2001:db8::100']);
-      });
-
-      const result = await dnsOps.getAAAARecords(zone, 'example.com');
-      expect(result).toEqual(['2001:db8::100']);
-    });
-
-    it('should return empty array when no AAAA records exist', async () => {
-      const zone = { resourceRecords: [] };
-
-      dns.default.resolve6.mockImplementation((name, callback) => {
-        callback(new Error('No AAAA records'), null);
-      });
-
-      const result = await dnsOps.getAAAARecords(zone, 'example.com');
-      expect(result).toEqual([]);
-    });
-  });
-
-  describe('getMXRecords', () => {
-    it('should return MX records from zone data', async () => {
-      const zone = {
-        resourceRecords: [
-          { type: 'MX', name: '', value: 'mail1.example.com' },
-          { type: 'MX', name: '@', value: 'mail2.example.com' },
-          { type: 'MX', name: 'subdomain', value: 'mail3.example.com' },
-        ],
-      };
-
-      const result = await dnsOps.getMXRecords(zone, 'example.com');
-      expect(result).toEqual(['mail1.example.com', 'mail2.example.com']);
-    });
-
-    it('should fallback to DNS resolution when no zone records', async () => {
-      const zone = { resourceRecords: [] };
-
-      dns.default.resolveMx.mockImplementation((domain, callback) => {
-        callback(null, [
-          { exchange: 'mail.example.com', priority: 10 },
-        ]);
-      });
-
-      const result = await dnsOps.getMXRecords(zone, 'example.com');
-      expect(result).toEqual(['mail.example.com']);
-    });
-
-    it('should return empty array when no MX records exist', async () => {
-      const zone = { resourceRecords: [] };
-
-      dns.default.resolveMx.mockImplementation((domain, callback) => {
-        callback(new Error('No MX records'), null);
-      });
-
-      const result = await dnsOps.getMXRecords(zone, 'example.com');
+      mockError();
+      const result = await dnsOps[fn](zone, 'example.com');
       expect(result).toEqual([]);
     });
   });
 
   describe('nsHostsResolvable', () => {
     it('should return true when all NS hosts resolve', async () => {
-      dns.default.resolve4.mockImplementation((name, callback) => {
-        callback(null, ['192.0.2.1']);
-      });
-      dns.default.resolve6.mockImplementation((name, callback) => {
-        callback(new Error('No AAAA'), null);
-      });
+      mockResolve4(['192.0.2.1']);
+      mockResolve6Error();
 
       const result = await dnsOps.nsHostsResolvable([
         'ns1.example.com',
@@ -297,9 +248,7 @@ describe('dns-operations', () => {
           callback(new Error('No A records'), null);
         }
       });
-      dns.default.resolve6.mockImplementation((name, callback) => {
-        callback(new Error('No AAAA'), null);
-      });
+      mockResolve6Error();
 
       const result = await dnsOps.nsHostsResolvable([
         'ns1.example.com',

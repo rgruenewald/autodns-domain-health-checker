@@ -1,9 +1,9 @@
 import {
-  resolveTxt,
+  resolveTxtRecord,
   resolveHostToIPs,
   resolveMxToIPs,
 } from "./dns-operations.js";
-import { getZone, updateZone } from "./autodns-client.js";
+import { updateZone, getAndValidateZone } from "./autodns-client.js";
 import { colors } from "../utils/helpers.js";
 import { logger } from "../utils/logger.js";
 
@@ -13,19 +13,7 @@ import { logger } from "../utils/logger.js";
  * @returns {Promise<string|null>} SPF record or null
  */
 export async function getSPFRecord(domain) {
-  try {
-    const records = await resolveTxt(domain);
-    const spfRecords = records
-      .map((record) => record.join(""))
-      .filter((record) => record.startsWith("v=spf1"));
-
-    return spfRecords.length > 0 ? spfRecords[0] : null;
-  } catch (error) {
-    if (error.code === "ENODATA" || error.code === "ENOTFOUND") {
-      return null;
-    }
-    throw error;
-  }
+  return resolveTxtRecord(domain, "v=spf1");
 }
 
 /**
@@ -260,24 +248,10 @@ export async function buildFlattenedSpfRecord(baseSpfRecord) {
  */
 export async function updateDomainSPFRecord(domainName, spfValue) {
   try {
-    // Get current zone data
-    const zoneInfo = await getZone(domainName);
-
-    if (
-      !zoneInfo.data ||
-      !Array.isArray(zoneInfo.data) ||
-      zoneInfo.data.length === 0
-    ) {
-      throw new Error("Invalid zone data received");
-    }
-
-    const zone = zoneInfo.data[0];
+    const zone = await getAndValidateZone(domainName);
 
     // Find existing SPF TXT record or create new one
     let recordFound = false;
-    if (!zone.resourceRecords) {
-      zone.resourceRecords = [];
-    }
 
     // Guard: Apex CNAME conflicts with any other record
     const hasApexCname = zone.resourceRecords.some(
@@ -329,6 +303,63 @@ export async function updateDomainSPFRecord(domainName, spfValue) {
 }
 
 /**
+ * Insert or update a TXT record in a zone's resource records.
+ *
+ * If a TXT record with the given prefix already exists, its value and TTL
+ * are updated. Otherwise a new TXT record is appended.
+ *
+ * @param {Object[]} records - Zone's resourceRecords array (mutated in place)
+ * @param {string} recordPrefix - Record name prefix to find/insert
+ * @param {string} recordValue - TXT record value
+ * @param {string} logName - Human-readable name for console/log messages
+ */
+function upsertTXTRecord(records, recordPrefix, recordValue, logName) {
+  for (let i = 0; i < records.length; i++) {
+    if (records[i].type === "TXT" && records[i].name === recordPrefix) {
+      records[i] = {
+        name: recordPrefix,
+        type: "TXT",
+        value: recordValue,
+        ttl: 300,
+      };
+      logger.debug({ record: recordPrefix }, "Updated existing TXT record");
+      return;
+    }
+  }
+
+  console.log(
+    `No existing TXT record found for ${logName}, creating new...`,
+  );
+  records.push({
+    name: recordPrefix,
+    type: "TXT",
+    value: recordValue,
+    ttl: 300,
+  });
+  logger.debug({ record: recordPrefix }, "Creating new TXT record");
+}
+
+/**
+ * Log update result status and return the result.
+ *
+ * @param {Object} updateResult - Response from updateZone
+ * @param {string} recordName - Human-readable name for console messages
+ * @returns {Object} The update result (pass-through)
+ */
+function logUpdateStatus(updateResult, recordName) {
+  if (updateResult.status?.type === "SUCCESS") {
+    console.log(
+      `${colors.green}✓${colors.reset} Successfully updated ${recordName}`,
+    );
+  } else {
+    console.log(
+      `${colors.red}✗${colors.reset} Update may have failed, check response above`,
+    );
+  }
+  return updateResult;
+}
+
+/**
  * Update the main SPF TXT record and create chunk records if needed
  * @param {string} recordName - Full record name (e.g., _spf.example.com)
  * @param {object} spfData - SPF data object with mainRecord, chunkRecords, needsSplit
@@ -358,23 +389,7 @@ export async function updateMainSPFRecord(recordName, spfData) {
   console.log(`New value: ${mainRecord}\n`);
 
   try {
-    // Get current zone data
-    const zoneInfo = await getZone(zoneName);
-
-    if (
-      !zoneInfo.data ||
-      !Array.isArray(zoneInfo.data) ||
-      zoneInfo.data.length === 0
-    ) {
-      console.error("Full zone response:", JSON.stringify(zoneInfo, null, 2));
-      throw new Error("Invalid zone data received");
-    }
-
-    const zone = zoneInfo.data[0];
-
-    if (!zone.resourceRecords) {
-      zone.resourceRecords = [];
-    }
+    const zone = await getAndValidateZone(zoneName);
 
     // Remove any non-TXT records with the same name FIRST to prevent AutoDNS validation issues
     // (e.g., if _spf has both TXT and A records, keep only the TXT)
@@ -488,69 +503,12 @@ export async function updateMainSPFRecord(recordName, spfData) {
         { zone: zoneName, record: recordPrefix },
         "Preparing to update main SPF record",
       );
-      const freshZoneInfo = await getZone(zoneName);
-      if (
-        !freshZoneInfo.data ||
-        !Array.isArray(freshZoneInfo.data) ||
-        freshZoneInfo.data.length === 0
-      ) {
-        throw new Error("Invalid zone data received on refresh");
-      }
+      const freshZone = await getAndValidateZone(zoneName);
 
-      const freshZone = freshZoneInfo.data[0];
-      if (!freshZone.resourceRecords) {
-        freshZone.resourceRecords = [];
-      }
-
-      // Find and update/create the main TXT record
-      let recordFound = false;
-      for (let i = 0; i < freshZone.resourceRecords.length; i++) {
-        if (
-          freshZone.resourceRecords[i].type === "TXT" &&
-          freshZone.resourceRecords[i].name === recordPrefix
-        ) {
-          freshZone.resourceRecords[i] = {
-            name: recordPrefix,
-            type: "TXT",
-            value: mainRecord,
-            ttl: 300,
-          };
-          recordFound = true;
-          logger.debug(
-            { record: recordPrefix },
-            "Updated existing main SPF record",
-          );
-          break;
-        }
-      }
-
-      if (!recordFound) {
-        console.log(
-          `No existing TXT record found for ${recordName}, creating new...`,
-        );
-        freshZone.resourceRecords.push({
-          name: recordPrefix,
-          type: "TXT",
-          value: mainRecord,
-          ttl: 300,
-        });
-        logger.debug({ record: recordPrefix }, "Creating new main SPF record");
-      }
+      upsertTXTRecord(freshZone.resourceRecords, recordPrefix, mainRecord, recordName);
 
       // Update the zone with the full record set (including chunks and main)
-      const updateResult = await updateZone(zoneName, freshZone);
-
-      if (updateResult.status?.type === "SUCCESS") {
-        console.log(
-          `${colors.green}✓${colors.reset} Successfully updated ${recordName}`,
-        );
-      } else {
-        console.log(
-          `${colors.red}✗${colors.reset} Update may have failed, check response above`,
-        );
-      }
-
-      return updateResult;
+      return logUpdateStatus(await updateZone(zoneName, freshZone), recordName);
     }
 
     // No splitting needed - update the main SPF record directly
@@ -559,55 +517,9 @@ export async function updateMainSPFRecord(recordName, spfData) {
       "Updating main SPF record (no split needed)",
     );
 
-    // Find and update/create the main TXT record
-    let recordFound = false;
-    for (let i = 0; i < zone.resourceRecords.length; i++) {
-      if (
-        zone.resourceRecords[i].type === "TXT" &&
-        zone.resourceRecords[i].name === recordPrefix
-      ) {
-        zone.resourceRecords[i] = {
-          name: recordPrefix,
-          type: "TXT",
-          value: mainRecord,
-          ttl: 300,
-        };
-        recordFound = true;
-        logger.debug(
-          { record: recordPrefix },
-          "Updated existing main SPF record",
-        );
-        break;
-      }
-    }
+    upsertTXTRecord(zone.resourceRecords, recordPrefix, mainRecord, recordName);
 
-    if (!recordFound) {
-      console.log(
-        `No existing TXT record found for ${recordName}, creating new...`,
-      );
-      zone.resourceRecords.push({
-        name: recordPrefix,
-        type: "TXT",
-        value: mainRecord,
-        ttl: 300,
-      });
-      logger.debug({ record: recordPrefix }, "Creating new main SPF record");
-    }
-
-    // Update the zone
-    const updateResult = await updateZone(zoneName, zone);
-
-    if (updateResult.status?.type === "SUCCESS") {
-      console.log(
-        `${colors.green}✓${colors.reset} Successfully updated ${recordName}`,
-      );
-    } else {
-      console.log(
-        `${colors.red}✗${colors.reset} Update may have failed, check response above`,
-      );
-    }
-
-    return updateResult;
+    return logUpdateStatus(await updateZone(zoneName, zone), recordName);
   } catch (error) {
     console.error(
       `${colors.red}✗${colors.reset} Failed to update ${recordName}`,

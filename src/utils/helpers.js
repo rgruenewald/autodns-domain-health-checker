@@ -11,20 +11,36 @@ export const colors = {
 };
 
 /**
+ * @param {Date} date
+ * @returns {string[]} [YYYY, MM, DD]
+ */
+function dateParts(date) {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ];
+}
+
+/**
+ * @param {Date} date
+ * @returns {string[]} [HH, MM, SS]
+ */
+function timeParts(date) {
+  return [
+    String(date.getHours()).padStart(2, '0'),
+    String(date.getMinutes()).padStart(2, '0'),
+    String(date.getSeconds()).padStart(2, '0'),
+  ];
+}
+
+/**
  * Format local timestamp for display (YYYY-MM-DD HH:MM:SS)
  * @param {Date} date - Date to format (defaults to current date)
  * @returns {string} Formatted timestamp
  */
 export function formatTimestamp(date = new Date()) {
-  return `${[
-    date.getFullYear(),
-    String(date.getMonth() + 1).padStart(2, '0'),
-    String(date.getDate()).padStart(2, '0'),
-  ].join('-')} ${[
-    String(date.getHours()).padStart(2, '0'),
-    String(date.getMinutes()).padStart(2, '0'),
-    String(date.getSeconds()).padStart(2, '0'),
-  ].join(':')}`;
+  return `${dateParts(date).join('-')} ${timeParts(date).join(':')}`;
 }
 
 /**
@@ -33,15 +49,7 @@ export function formatTimestamp(date = new Date()) {
  * @returns {string} Formatted timestamp for filenames
  */
 export function getTimestamp(date = new Date()) {
-  return `${[
-    date.getFullYear(),
-    String(date.getMonth() + 1).padStart(2, '0'),
-    String(date.getDate()).padStart(2, '0'),
-  ].join('')}-${[
-    String(date.getHours()).padStart(2, '0'),
-    String(date.getMinutes()).padStart(2, '0'),
-    String(date.getSeconds()).padStart(2, '0'),
-  ].join('')}`;
+  return `${dateParts(date).join('')}-${timeParts(date).join('')}`;
 }
 
 /**

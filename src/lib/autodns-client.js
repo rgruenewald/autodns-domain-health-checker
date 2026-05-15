@@ -81,7 +81,7 @@ if (typeof refillTimer.unref === 'function') {
  * // Now safe to make API call
  * const response = await axios.get(...);
  */
-export function rateLimitAutoDNS() {
+function rateLimitAutoDNS() {
   if (autodnsRate.tokens > 0) {
     autodnsRate.tokens--;
     logger.trace(
@@ -147,6 +147,69 @@ function isRetryableError(error) {
 }
 
 /**
+ * Log an API error appropriately (HTTP vs network) and throw for retry.
+ *
+ * If the error is not retryable, throws an AbortError to stop p-retry.
+ * Otherwise re-throws the original error to trigger another retry attempt.
+ *
+ * @param {Error} error - The caught error
+ * @param {Object} [options={}] - Logging options
+ * @param {string} [options.responseMessage] - Log message for HTTP errors
+ * @param {string} [options.networkMessage] - Log message for network errors
+ * @param {Object} [options.metadata] - Extra metadata to include in log
+ * @param {boolean} [options.includeResponseData=true] - Whether to log error.response.data
+ */
+function handleApiError(error, options = {}) {
+  if (error.response) {
+    const logCtx = {
+      ...(options.metadata || {}),
+      status: error.response.status,
+      statusText: error.response.statusText,
+    };
+    if (options.includeResponseData !== false && error.response.data) {
+      logCtx.data = error.response.data;
+    }
+    logger.error(logCtx, options.responseMessage || 'AutoDNS API error');
+  } else {
+    logError(logger, error,
+      options.networkMessage || 'Network error',
+      options.metadata || {});
+  }
+
+  if (!isRetryableError(error)) {
+    throw new AbortError(error);
+  }
+
+  throw error;
+}
+
+/**
+ * Build p-retry configuration object.
+ *
+ * @param {string} retryMessage - Log message for onFailedAttempt
+ * @param {Function} [extraMetaFn] - Called with the attempt error; returns extra metadata to merge
+ * @returns {Object} p-retry options
+ */
+function buildRetryConfig(retryMessage, extraMetaFn = () => ({})) {
+  return {
+    retries: RETRY_CONFIG.RETRIES,
+    minTimeout: RETRY_CONFIG.MIN_TIMEOUT,
+    maxTimeout: RETRY_CONFIG.MAX_TIMEOUT,
+    factor: RETRY_CONFIG.FACTOR,
+    onFailedAttempt: (attemptError) => {
+      logger.warn(
+        {
+          ...extraMetaFn(attemptError),
+          attempt: attemptError.attemptNumber,
+          retriesLeft: attemptError.retriesLeft,
+        },
+        retryMessage,
+      );
+    },
+  };
+}
+
+/**
  * Query all domains from AutoDNS API with retry logic.
  *
  * Retrieves all domains from the AutoDNS account with automatic retry
@@ -201,42 +264,16 @@ export async function queryDomains() {
 
         return response.data;
       } catch (error) {
-        if (error.response) {
-          logger.error(
-            {
-              status: error.response.status,
-              statusText: error.response.statusText,
-              data: error.response.data,
-            },
-            'AutoDNS API error',
-          );
-        } else {
-          logError(logger, error, 'Network error querying domains');
-        }
-
-        if (!isRetryableError(error)) {
-          throw new AbortError(error);
-        }
-
-        throw error;
+        handleApiError(error, {
+          responseMessage: 'AutoDNS API error',
+          networkMessage: 'Network error querying domains',
+        });
       }
     },
-    {
-      retries: RETRY_CONFIG.RETRIES,
-      minTimeout: RETRY_CONFIG.MIN_TIMEOUT,
-      maxTimeout: RETRY_CONFIG.MAX_TIMEOUT,
-      factor: RETRY_CONFIG.FACTOR,
-      onFailedAttempt: (error) => {
-        logger.warn(
-          {
-            attempt: error.attemptNumber,
-            retriesLeft: error.retriesLeft,
-            error: error.message,
-          },
-          'Domain query attempt failed, retrying',
-        );
-      },
-    },
+    buildRetryConfig(
+      'Domain query attempt failed, retrying',
+      (err) => ({ error: err.message }),
+    ),
   );
 }
 
@@ -288,44 +325,18 @@ export async function getZone(zoneName) {
 
         return response.data;
       } catch (error) {
-        if (error.response) {
-          logger.error(
-            {
-              zone: sanitizedZone,
-              status: error.response.status,
-              statusText: error.response.statusText,
-            },
-            'API error getting zone',
-          );
-        } else {
-          logError(logger, error, 'Network error getting zone', {
-            zone: sanitizedZone,
-          });
-        }
-
-        if (!isRetryableError(error)) {
-          throw new AbortError(error);
-        }
-
-        throw error;
+        handleApiError(error, {
+          metadata: { zone: sanitizedZone },
+          responseMessage: 'API error getting zone',
+          networkMessage: 'Network error getting zone',
+          includeResponseData: false,
+        });
       }
     },
-    {
-      retries: RETRY_CONFIG.RETRIES,
-      minTimeout: RETRY_CONFIG.MIN_TIMEOUT,
-      maxTimeout: RETRY_CONFIG.MAX_TIMEOUT,
-      factor: RETRY_CONFIG.FACTOR,
-      onFailedAttempt: (error) => {
-        logger.warn(
-          {
-            zone: sanitizedZone,
-            attempt: error.attemptNumber,
-            retriesLeft: error.retriesLeft,
-          },
-          'Get zone attempt failed, retrying',
-        );
-      },
-    },
+    buildRetryConfig(
+      'Get zone attempt failed, retrying',
+      () => ({ zone: sanitizedZone }),
+    ),
   );
 }
 
@@ -410,44 +421,47 @@ export async function updateZone(zoneName, zoneData) {
 
         return response.data;
       } catch (error) {
-        if (error.response) {
-          logger.error(
-            {
-              zone: sanitizedZone,
-              status: error.response.status,
-              statusText: error.response.statusText,
-              data: error.response.data,
-            },
-            'API error updating zone',
-          );
-        } else {
-          logError(logger, error, 'Network error updating zone', {
-            zone: sanitizedZone,
-          });
-        }
-
-        if (!isRetryableError(error)) {
-          throw new AbortError(error);
-        }
-
-        throw error;
+        handleApiError(error, {
+          metadata: { zone: sanitizedZone },
+          responseMessage: 'API error updating zone',
+          networkMessage: 'Network error updating zone',
+          includeResponseData: true,
+        });
       }
     },
-    {
-      retries: RETRY_CONFIG.RETRIES,
-      minTimeout: RETRY_CONFIG.MIN_TIMEOUT,
-      maxTimeout: RETRY_CONFIG.MAX_TIMEOUT,
-      factor: RETRY_CONFIG.FACTOR,
-      onFailedAttempt: (error) => {
-        logger.warn(
-          {
-            zone: sanitizedZone,
-            attempt: error.attemptNumber,
-            retriesLeft: error.retriesLeft,
-          },
-          'Update zone attempt failed, retrying',
-        );
-      },
-    },
+    buildRetryConfig(
+      'Update zone attempt failed, retrying',
+      () => ({ zone: sanitizedZone }),
+    ),
   );
+}
+
+/**
+ * Get and validate a zone from AutoDNS, returning the first zone object.
+ *
+ * Combines getZone, structural validation, and resourceRecords initialization
+ * into a single call — reducing duplication across DKIM, DMARC, and SPF modules.
+ *
+ * @async
+ * @param {string} domainName - Domain name to fetch zone for
+ * @returns {Promise<Object>} Zone object with resourceRecords guaranteed to be an array
+ * @throws {Error} If zone data is invalid or missing
+ */
+export async function getAndValidateZone(domainName) {
+  const zoneInfo = await getZone(domainName);
+
+  if (
+    !zoneInfo.data ||
+    !Array.isArray(zoneInfo.data) ||
+    zoneInfo.data.length === 0
+  ) {
+    throw new Error('Invalid zone data received');
+  }
+
+  const zone = zoneInfo.data[0];
+  if (!zone.resourceRecords) {
+    zone.resourceRecords = [];
+  }
+
+  return zone;
 }
