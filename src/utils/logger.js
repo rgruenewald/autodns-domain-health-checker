@@ -131,7 +131,7 @@ export const logger = createLogger();
  * const requestLogger = createChildLogger({ requestId: '123-456' });
  * requestLogger.debug('API call initiated'); // Includes requestId
  */
-function createChildLogger(bindings) {
+export function createChildLogger(bindings) {
   return logger.child(bindings);
 }
 
@@ -146,7 +146,7 @@ function createChildLogger(bindings) {
  *
  * logger.level = LOG_LEVELS.DEBUG;
  */
-const LOG_LEVELS = {
+export const LOG_LEVELS = {
   TRACE: 'trace',
   DEBUG: 'debug',
   INFO: 'info',

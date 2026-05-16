@@ -298,7 +298,8 @@ function evaluateCheckResult(current, expected, label, result, displayValue) {
  * Matches countCheckResult's classification: fail, error, and needs-update
  * are failure states; ok and skipped are not.
  *
- * @param {string} status - A status string (e.g., 'fail "No records"', 'error "timeout"', 'needs-update')
+ * @param {string} status - A status string (e.g., 'fail "No records"',
+ *   'error "timeout"', 'needs-update')
  * @returns {boolean}
  */
 function isFailureStatus(status) {
@@ -310,7 +311,8 @@ function isFailureStatus(status) {
 /**
  * Tally a single check result into running counts and failure tracking.
  *
- * @param {string} statusField - The status string from the result (ok / fail / error / skipped / needs-update)
+ * @param {string} statusField - The status string from the result
+ *   (ok / fail / error / skipped / needs-update)
  * @param {'spf'|'dmarc'|'dkim'} type - Protocol key for counts/failures
  * @param {Object} counts - Running counts object
  * @param {Object} failuresByType - Per-type failure domain lists

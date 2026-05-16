@@ -366,7 +366,8 @@ function logUpdateStatus(updateResult, recordName) {
  * @returns {Promise<object>} Update result
  */
 export async function updateMainSPFRecord(recordName, spfData) {
-  let { mainRecord, chunkRecords, needsSplit } = spfData;
+  let { mainRecord } = spfData;
+  const { chunkRecords, needsSplit } = spfData;
 
   // Extract the zone name and record prefix
   const parts = recordName.split('.');
