@@ -2,10 +2,10 @@ import {
   resolveTxtRecord,
   resolveHostToIPs,
   resolveMxToIPs,
-} from "./dns-operations.js";
-import { updateZone, getAndValidateZone } from "./autodns-client.js";
-import { colors } from "../utils/helpers.js";
-import { logger } from "../utils/logger.js";
+} from './dns-operations.js';
+import { updateZone, getAndValidateZone } from './autodns-client.js';
+import { colors } from '../utils/helpers.js';
+import { logger } from '../utils/logger.js';
 
 /**
  * Query SPF record for a domain
@@ -13,7 +13,7 @@ import { logger } from "../utils/logger.js";
  * @returns {Promise<string|null>} SPF record or null
  */
 export async function getSPFRecord(domain) {
-  return resolveTxtRecord(domain, "v=spf1");
+  return resolveTxtRecord(domain, 'v=spf1');
 }
 
 /**
@@ -30,7 +30,7 @@ export async function resolveSpfIncludes(
 ) {
   // Prevent infinite loops and limit recursion depth
   if (depth > 10) {
-    logger.warn({ depth }, "Max SPF recursion depth reached");
+    logger.warn({ depth }, 'Max SPF recursion depth reached');
     return { mechanisms: [], modifiers: [] };
   }
 
@@ -41,16 +41,16 @@ export async function resolveSpfIncludes(
   const parts = spfRecord.split(/\s+/);
 
   for (const part of parts) {
-    if (part === "v=spf1") {
+    if (part === 'v=spf1') {
       continue; // Skip version
     }
 
-    if (part.startsWith("include:")) {
+    if (part.startsWith('include:')) {
       const includeDomain = part.substring(8);
 
       // Prevent circular includes
       if (visited.has(includeDomain)) {
-        logger.warn({ domain: includeDomain }, "Circular SPF include detected");
+        logger.warn({ domain: includeDomain }, 'Circular SPF include detected');
         continue;
       }
 
@@ -70,33 +70,33 @@ export async function resolveSpfIncludes(
         } else {
           logger.warn(
             { domain: includeDomain },
-            "Could not resolve SPF for include",
+            'Could not resolve SPF for include',
           );
         }
       } catch (error) {
         logger.warn(
           { domain: includeDomain, error: error.message },
-          "Error resolving SPF include",
+          'Error resolving SPF include',
         );
       }
-    } else if (part.startsWith("redirect=")) {
+    } else if (part.startsWith('redirect=')) {
       modifiers.push(part);
     } else if (
-      part === "all" ||
-      part.startsWith("-all") ||
-      part.startsWith("~all") ||
-      part.startsWith("+all") ||
-      part.startsWith("?all")
+      part === 'all' ||
+      part.startsWith('-all') ||
+      part.startsWith('~all') ||
+      part.startsWith('+all') ||
+      part.startsWith('?all')
     ) {
       modifiers.push(part);
-    } else if (part === "a" || part === "mx") {
+    } else if (part === 'a' || part === 'mx') {
       // Skip plain 'a' or 'mx' - they're domain-contextual and should only
       // be in each domain's own SPF record, not in shared includes
       logger.debug(
         { mechanism: part },
-        "Skipping plain a/mx mechanism during flattening",
+        'Skipping plain a/mx mechanism during flattening',
       );
-    } else if (part.startsWith("a:")) {
+    } else if (part.startsWith('a:')) {
       const hostname = part.substring(2);
       try {
         const ips = await resolveHostToIPs(hostname);
@@ -104,17 +104,17 @@ export async function resolveSpfIncludes(
       } catch (error) {
         logger.warn(
           { hostname, error: error.message },
-          "Could not resolve A record",
+          'Could not resolve A record',
         );
         mechanisms.push(part);
       }
-    } else if (part.startsWith("mx:")) {
+    } else if (part.startsWith('mx:')) {
       const domain = part.substring(3);
       try {
         const ips = await resolveMxToIPs(domain);
         mechanisms.push(...ips);
       } catch (error) {
-        logger.warn({ domain, error: error.message }, "Could not resolve MX");
+        logger.warn({ domain, error: error.message }, 'Could not resolve MX');
         mechanisms.push(part);
       }
     } else {
@@ -177,16 +177,16 @@ export async function buildFlattenedSpfRecord(baseSpfRecord) {
   const uniqueModifiers = [...new Set(resolved.modifiers)];
 
   // Get the 'all' modifier to add at the end
-  const allModifier = uniqueModifiers.find((m) => m.includes("all"));
-  const otherModifiers = uniqueModifiers.filter((m) => !m.includes("all"));
+  const allModifier = uniqueModifiers.find((m) => m.includes('all'));
+  const otherModifiers = uniqueModifiers.filter((m) => !m.includes('all'));
 
   // Combine mechanisms and non-all modifiers
   const allParts = [...uniqueMechanisms, ...otherModifiers];
 
   // Build final SPF record (single record for backward compatibility check)
-  const flattenedSpf = ["v=spf1", ...allParts, allModifier]
+  const flattenedSpf = ['v=spf1', ...allParts, allModifier]
     .filter(Boolean)
-    .join(" ");
+    .join(' ');
 
   console.log(`Flattened SPF: ${flattenedSpf}`);
   console.log(`Length: ${flattenedSpf.length} bytes`);
@@ -207,7 +207,7 @@ export async function buildFlattenedSpfRecord(baseSpfRecord) {
     console.log(`Split into ${chunks.length} chunks:\n`);
     const chunkRecords = chunks.map((chunk, index) => {
       // Use ~all (softfail) in chunks - the main record has the final policy
-      const record = ["v=spf1", ...chunk, "~all"].join(" ");
+      const record = ['v=spf1', ...chunk, '~all'].join(' ');
       console.log(`  Chunk ${index + 1}: ${record.length} bytes`);
       return record;
     });
@@ -216,9 +216,9 @@ export async function buildFlattenedSpfRecord(baseSpfRecord) {
     // Note: includes will be relative (_spf1, _spf2, etc.) and will be made FQDNs
     // when actually updating the zone
     const includeStatements = chunks.map((_, i) => `include:_spf${i + 1}`);
-    const mainRecord = ["v=spf1", ...includeStatements, allModifier]
+    const mainRecord = ['v=spf1', ...includeStatements, allModifier]
       .filter(Boolean)
-      .join(" ");
+      .join(' ');
 
     console.log(`\nMain record: ${mainRecord} (${mainRecord.length} bytes)\n`);
 
@@ -255,22 +255,22 @@ export async function updateDomainSPFRecord(domainName, spfValue) {
 
     // Guard: Apex CNAME conflicts with any other record
     const hasApexCname = zone.resourceRecords.some(
-      (rr) => rr.type === "CNAME" && (rr.name === "" || rr.name === "@"),
+      (rr) => rr.type === 'CNAME' && (rr.name === '' || rr.name === '@'),
     );
     if (hasApexCname) {
       throw new Error(
-        "Apex has a CNAME record; cannot add/update " +
-          "SPF TXT at zone apex due to DNS constraints",
+        'Apex has a CNAME record; cannot add/update ' +
+          'SPF TXT at zone apex due to DNS constraints',
       );
     }
 
     for (const record of zone.resourceRecords) {
       // SPF record is a TXT record with empty name for the domain itself
       if (
-        record.type === "TXT" &&
-        (record.name === "" || record.name === "@") &&
+        record.type === 'TXT' &&
+        (record.name === '' || record.name === '@') &&
         record.value &&
-        record.value.startsWith("v=spf1")
+        record.value.startsWith('v=spf1')
       ) {
         // Update existing SPF record
         record.value = spfValue;
@@ -283,8 +283,8 @@ export async function updateDomainSPFRecord(domainName, spfValue) {
     if (!recordFound) {
       // Add new SPF record
       zone.resourceRecords.push({
-        name: "",
-        type: "TXT",
+        name: '',
+        type: 'TXT',
         value: spfValue,
         ttl: 300,
       });
@@ -315,14 +315,14 @@ export async function updateDomainSPFRecord(domainName, spfValue) {
  */
 function upsertTXTRecord(records, recordPrefix, recordValue, logName) {
   for (let i = 0; i < records.length; i++) {
-    if (records[i].type === "TXT" && records[i].name === recordPrefix) {
+    if (records[i].type === 'TXT' && records[i].name === recordPrefix) {
       records[i] = {
         name: recordPrefix,
-        type: "TXT",
+        type: 'TXT',
         value: recordValue,
         ttl: 300,
       };
-      logger.debug({ record: recordPrefix }, "Updated existing TXT record");
+      logger.debug({ record: recordPrefix }, 'Updated existing TXT record');
       return;
     }
   }
@@ -332,11 +332,11 @@ function upsertTXTRecord(records, recordPrefix, recordValue, logName) {
   );
   records.push({
     name: recordPrefix,
-    type: "TXT",
+    type: 'TXT',
     value: recordValue,
     ttl: 300,
   });
-  logger.debug({ record: recordPrefix }, "Creating new TXT record");
+  logger.debug({ record: recordPrefix }, 'Creating new TXT record');
 }
 
 /**
@@ -347,7 +347,7 @@ function upsertTXTRecord(records, recordPrefix, recordValue, logName) {
  * @returns {Object} The update result (pass-through)
  */
 function logUpdateStatus(updateResult, recordName) {
-  if (updateResult.status?.type === "SUCCESS") {
+  if (updateResult.status?.type === 'SUCCESS') {
     console.log(
       `${colors.green}✓${colors.reset} Successfully updated ${recordName}`,
     );
@@ -369,9 +369,9 @@ export async function updateMainSPFRecord(recordName, spfData) {
   let { mainRecord, chunkRecords, needsSplit } = spfData;
 
   // Extract the zone name and record prefix
-  const parts = recordName.split(".");
-  const zoneName = parts.slice(-2).join(".");
-  const recordPrefix = parts.slice(0, -2).join(".");
+  const parts = recordName.split('.');
+  const zoneName = parts.slice(-2).join('.');
+  const recordPrefix = parts.slice(0, -2).join('.');
 
   // Update includes in mainRecord to use FQDNs (e.g., _spf1.diebasis.de)
   if (needsSplit) {
@@ -383,7 +383,7 @@ export async function updateMainSPFRecord(recordName, spfData) {
 
   logger.info(
     { record: recordName, value: mainRecord },
-    "Updating main SPF record",
+    'Updating main SPF record',
   );
   console.log(`\nUpdating DNS record: ${recordName}`);
   console.log(`New value: ${mainRecord}\n`);
@@ -394,10 +394,10 @@ export async function updateMainSPFRecord(recordName, spfData) {
     // Remove any non-TXT records with the same name FIRST to prevent AutoDNS validation issues
     // (e.g., if _spf has both TXT and A records, keep only the TXT)
     zone.resourceRecords = zone.resourceRecords.filter((record) => {
-      if (record.name === recordPrefix && record.type !== "TXT") {
+      if (record.name === recordPrefix && record.type !== 'TXT') {
         logger.debug(
           { name: record.name, type: record.type },
-          "Removing non-TXT record at SPF record name",
+          'Removing non-TXT record at SPF record name',
         );
         console.log(
           `  ${colors.yellow}⚠${colors.reset} Removed ${record.type} record ${recordPrefix}.${zoneName}`,
@@ -417,7 +417,7 @@ export async function updateMainSPFRecord(recordName, spfData) {
       // Remove the main SPF record from this update to avoid API validation issues
       zonesForChunkUpdate.resourceRecords =
         zonesForChunkUpdate.resourceRecords.filter(
-          (record) => !(record.type === "TXT" && record.name === recordPrefix),
+          (record) => !(record.type === 'TXT' && record.name === recordPrefix),
         );
 
       for (let i = 0; i < chunkRecords.length; i++) {
@@ -428,7 +428,7 @@ export async function updateMainSPFRecord(recordName, spfData) {
         let chunkFound = false;
         for (let j = 0; j < zonesForChunkUpdate.resourceRecords.length; j++) {
           if (
-            zonesForChunkUpdate.resourceRecords[j].type === "TXT" &&
+            zonesForChunkUpdate.resourceRecords[j].type === 'TXT' &&
             zonesForChunkUpdate.resourceRecords[j].name === chunkName
           ) {
             zonesForChunkUpdate.resourceRecords[j].value = chunkValue;
@@ -444,7 +444,7 @@ export async function updateMainSPFRecord(recordName, spfData) {
         if (!chunkFound) {
           zonesForChunkUpdate.resourceRecords.push({
             name: chunkName,
-            type: "TXT",
+            type: 'TXT',
             value: chunkValue,
             ttl: 300,
           });
@@ -465,7 +465,7 @@ export async function updateMainSPFRecord(recordName, spfData) {
       zonesForChunkUpdate.resourceRecords =
         zonesForChunkUpdate.resourceRecords.filter((record) => {
           if (
-            record.type === "TXT" &&
+            record.type === 'TXT' &&
             record.name.startsWith(recordPrefix) &&
             /\d+$/.test(record.name) &&
             !expectedChunks.has(record.name)
@@ -481,27 +481,27 @@ export async function updateMainSPFRecord(recordName, spfData) {
       // Update zone with chunk records ONLY (without the main SPF record)
       logger.debug(
         { zone: zoneName, chunks: chunkRecords.length },
-        "Updating zone with SPF chunks",
+        'Updating zone with SPF chunks',
       );
       try {
         await updateZone(zoneName, zonesForChunkUpdate);
-        logger.debug({ zone: zoneName }, "SPF chunks updated successfully");
+        logger.debug({ zone: zoneName }, 'SPF chunks updated successfully');
       } catch (chunkError) {
         logger.error(
           { zone: zoneName, error: chunkError.message },
-          "Failed to update SPF chunks",
+          'Failed to update SPF chunks',
         );
         throw chunkError;
       }
 
       // Wait for chunk records to be processed by the API before creating the main record
-      console.log("Waiting for DNS API to process chunk records...");
+      console.log('Waiting for DNS API to process chunk records...');
       await new Promise((resolve) => setTimeout(resolve, 3000));
 
       // Now update the main SPF record in a completely separate zone update
       logger.debug(
         { zone: zoneName, record: recordPrefix },
-        "Preparing to update main SPF record",
+        'Preparing to update main SPF record',
       );
       const freshZone = await getAndValidateZone(zoneName);
 
@@ -514,7 +514,7 @@ export async function updateMainSPFRecord(recordName, spfData) {
     // No splitting needed - update the main SPF record directly
     logger.debug(
       { zone: zoneName, record: recordPrefix },
-      "Updating main SPF record (no split needed)",
+      'Updating main SPF record (no split needed)',
     );
 
     upsertTXTRecord(zone.resourceRecords, recordPrefix, mainRecord, recordName);
@@ -524,7 +524,7 @@ export async function updateMainSPFRecord(recordName, spfData) {
     console.error(
       `${colors.red}✗${colors.reset} Failed to update ${recordName}`,
     );
-    console.error("Error details:", error.message);
+    console.error('Error details:', error.message);
     throw error;
   }
 }

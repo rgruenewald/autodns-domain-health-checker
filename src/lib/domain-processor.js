@@ -149,9 +149,9 @@ export async function processDomains(data, originalSpf, spfData) {
       countCheckResult(result.dkimStatus, 'dkim', counts, failuresByType, domainName);
 
       counts.a[aStatus === 'ok' ? 'ok' : 'fail']++;
-      if (aStatus === 'fail') failuresByType.A.push(domainName);
+      if (aStatus === 'fail') {failuresByType.A.push(domainName);}
       counts.aaaa[aaaaStatus === 'ok' ? 'ok' : 'fail']++;
-      if (aaaaStatus === 'fail') failuresByType.AAAA.push(domainName);
+      if (aaaaStatus === 'fail') {failuresByType.AAAA.push(domainName);}
 
       if (healthParts.SOA === 'fail') {
         failuresByType.SOA.push(domainName);
@@ -178,7 +178,7 @@ export async function processDomains(data, originalSpf, spfData) {
       // Write output to both file and console
       const detailLines = formatDomainResultLines(
         timestamp, domainName, result, aStatus, aaaaStatus, healthParts);
-      domainDetailsOutput += detailLines.join('\n') + '\n\n';
+      domainDetailsOutput += `${detailLines.join('\n')  }\n\n`;
       detailLines.forEach((line) => console.log(line));
       console.log('');
     } catch (err) {

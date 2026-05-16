@@ -10,7 +10,7 @@ import { colors, formatTimestamp, getTimestamp, parseSummaryCounts }
  */
 function buildReport(entries) {
   return entries.map(([ts, domain, spf, dmarc, dkim]) =>
-    `${ts} ${domain}\n    SPF:        ${spf}\n    DMARC:      ${dmarc}\n    DKIM:       ${dkim}\n`
+    `${ts} ${domain}\n    SPF:        ${spf}\n    DMARC:      ${dmarc}\n    DKIM:       ${dkim}\n`,
   ).join('\n');
 }
 
