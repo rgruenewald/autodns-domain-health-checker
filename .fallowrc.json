@@ -1,0 +1,45 @@
+{
+  "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
+  "entry": [
+    "src/index.js"
+  ],
+  "ignorePatterns": [
+    "node_modules/**",
+    "coverage/**",
+    "reports/**"
+  ],
+  "ignoreDependencies": [
+    "pino-pretty"
+  ],
+  "rules": {
+    "unused-files": "warn",
+    "unused-exports": "warn",
+    "unused-dependencies": "error",
+    "unlisted-dependencies": "error",
+    "unresolved-imports": "error",
+    "circular-dependency": "error"
+  },
+  "duplicates": {
+    "mode": "mild",
+    "minTokens": 60,
+    "minLines": 6,
+    "threshold": 8,
+    "ignoreImports": true
+  },
+  "health": {
+    "maxCyclomatic": 20,
+    "maxCognitive": 18,
+    "maxCrap": 30,
+    "ignore": [
+      "tests/**"
+    ]
+  },
+  "audit": {
+    "gate": "new-only"
+  },
+  "production": {
+    "deadCode": false,
+    "health": true,
+    "dupes": false
+  }
+}
