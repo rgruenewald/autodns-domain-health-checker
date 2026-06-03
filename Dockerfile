@@ -1,5 +1,6 @@
-# Pin exact Node.js version for reproducible builds
-FROM node:20.10.0-alpine
+# Node.js version sourced from .mise.toml via build-arg; default to latest 24.x
+ARG NODE_VERSION=24
+FROM node:${NODE_VERSION}-alpine
 
 # Set working directory
 WORKDIR /app

@@ -42,6 +42,11 @@ else
 fi
 
 echo "✅ Configuration files found"
+
+# Extract Node.js version from .mise.toml (single source of truth)
+NODE_VERSION=$(grep 'node = ' .mise.toml | sed 's/.*"\(.*\)".*/\1/')
+export NODE_VERSION
+echo "🔧 Node.js version: ${NODE_VERSION}"
 echo "🔨 Building and starting container..."
 echo ""
 
