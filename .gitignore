@@ -28,3 +28,6 @@ Thumbs.db
 reports/
 
 dkim.config.json
+
+# Fallow cache and baselines
+.fallow/
