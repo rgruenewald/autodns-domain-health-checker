@@ -4,23 +4,6 @@
   "description": "Query and output domains from AutoDNS API",
   "main": "src/index.js",
   "type": "module",
-  "scripts": {
-    "start": "node src/index.js",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:ui": "vitest --ui",
-    "test:coverage": "vitest run --coverage",
-    "legacy": "node index.js",
-    "lint": "eslint .",
-    "lint:fix": "eslint . --fix",
-    "fallow": "fallow --format compact",
-    "fallow:dead": "fallow dead-code --format compact",
-    "fallow:dupes": "fallow dupes --format compact",
-    "fallow:health": "fallow health --format compact --score",
-    "fallow:audit": "fallow audit --gate new-only",
-    "fallow:fix": "fallow fix",
-    "fallow:fix:dry": "fallow fix --dry-run"
-  },
   "keywords": [
     "autodns",
     "domains",
@@ -43,9 +26,5 @@
     "fallow": "^2.75.0",
     "globals": "^16.5.0",
     "vitest": "^4.0.9"
-  },
-  "allowScripts": {
-    "esbuild@0.25.12": true,
-    "fallow@2.75.0": true
   }
 }

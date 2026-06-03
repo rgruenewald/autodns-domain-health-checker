@@ -1,0 +1,73 @@
+[tools]
+node = "20.10.0"
+
+[env]
+NODE_OPTIONS = "--experimental-vm-modules"
+
+[tasks.install]
+description = "Install Node.js and npm dependencies"
+run = "npm ci"
+
+# ── App ───────────────────────────────────────────
+
+[tasks.start]
+description = "Start the application"
+run = "node src/index.js"
+
+# ── Test ──────────────────────────────────────────
+
+[tasks.test]
+description = "Run tests (single pass)"
+run = "npx vitest run"
+
+[tasks.test-watch]
+description = "Run tests in watch mode"
+run = "npx vitest"
+
+[tasks.test-ui]
+description = "Run tests with Vitest UI"
+run = "npx vitest --ui"
+
+[tasks.test-coverage]
+description = "Run tests with coverage"
+run = "npx vitest run --coverage"
+
+# ── Lint ──────────────────────────────────────────
+
+[tasks.lint]
+description = "Run ESLint"
+run = "npx eslint ."
+
+[tasks.lint-fix]
+description = "Run ESLint with auto-fix"
+run = "npx eslint . --fix"
+
+# ── Fallow ────────────────────────────────────────
+
+[tasks.fallow]
+description = "Run fallow (default checks)"
+run = "npx fallow --format compact"
+
+[tasks.fallow-dead]
+description = "Check for dead code"
+run = "npx fallow dead-code --format compact"
+
+[tasks.fallow-dupes]
+description = "Check for duplicate code"
+run = "npx fallow dupes --format compact"
+
+[tasks.fallow-health]
+description = "Run fallow health check with score"
+run = "npx fallow health --format compact --score"
+
+[tasks.fallow-audit]
+description = "Run fallow audit (new issues only)"
+run = "npx fallow audit --gate new-only"
+
+[tasks.fallow-fix]
+description = "Auto-fix fallow issues"
+run = "npx fallow fix"
+
+[tasks.fallow-fix-dry]
+description = "Preview fallow auto-fixes"
+run = "npx fallow fix --dry-run"
